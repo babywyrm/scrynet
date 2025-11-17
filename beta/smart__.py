@@ -1289,12 +1289,36 @@ def main() -> None:
     review_state = None
     if REVIEW_STATE_AVAILABLE and (args.enable_review_state or args.resume_review):
         review_manager = ReviewStateManager(args.cache_dir)
+        current_fingerprint = review_manager.compute_dir_fingerprint(repo_path)
         
         if args.resume_review:
             try:
                 review_state = review_manager.load_review(args.resume_review)
                 console.print(f"[green]✓ Resuming review: {review_state.review_id}[/green]")
                 console.print(f"[dim]Previous question: {review_state.question}[/dim]")
+                
+                # Check if codebase has changed
+                if review_state.dir_fingerprint != current_fingerprint:
+                    console.print(f"\n[yellow]⚠ Codebase has changed since this review was created![/yellow]")
+                    console.print(f"[dim]Original fingerprint: {review_state.dir_fingerprint[:8]}...[/dim]")
+                    console.print(f"[dim]Current fingerprint:  {current_fingerprint[:8]}...[/dim]")
+                    choice = input("\nHow would you like to proceed?\n  [1] Re-analyze changed files (recommended)\n  [2] Continue with old analysis (may be outdated)\n  [3] Start fresh review\nEnter choice [1-3] (default: 1): ").strip()
+                    if choice == "3":
+                        review_state = review_manager.create_review(str(repo_path), question, current_fingerprint)
+                        console.print("[green]Starting fresh review...[/green]")
+                    elif choice == "2":
+                        console.print("[yellow]Continuing with old analysis (codebase may have changed)[/yellow]")
+                    else:  # default or "1"
+                        # Update fingerprint but keep review ID for continuity
+                        review_state.dir_fingerprint = current_fingerprint
+                        review_state.status = "in_progress"
+                        # Clear checkpoints to force re-analysis
+                        review_state.checkpoints = []
+                        review_state.findings = []
+                        review_state.synthesis = None
+                        review_manager.save_review(review_state)
+                        console.print("[green]Re-analyzing with updated codebase...[/green]")
+                
                 # Optionally use previous question if not provided
                 if not args.question:
                     use_previous = input("Use previous question? [Y/n]: ").strip().lower()
@@ -1302,24 +1326,51 @@ def main() -> None:
                         question = review_state.question
             except FileNotFoundError:
                 console.print(f"[yellow]Review '{args.resume_review}' not found. Starting new review.[/yellow]")
-                review_state = review_manager.create_review(str(repo_path), question)
+                review_state = review_manager.create_review(str(repo_path), question, current_fingerprint)
         else:
             # Check for matching review by directory fingerprint
-            dir_fingerprint = review_manager.compute_dir_fingerprint(repo_path)
-            matching_id = review_manager.find_matching_review(str(repo_path), dir_fingerprint)
+            matching_id = review_manager.find_matching_review(str(repo_path), current_fingerprint)
             if args.resume_last and matching_id:
                 review_state = review_manager.load_review(matching_id)
                 console.print(f"[green]✓ Auto-resumed latest matching review: {matching_id}[/green]")
+                # Check if codebase has changed (even if fingerprint matched, files might have changed)
+                if review_state.dir_fingerprint != current_fingerprint:
+                    console.print(f"\n[yellow]⚠ Codebase has changed since this review was created![/yellow]")
+                    console.print(f"[dim]Original fingerprint: {review_state.dir_fingerprint[:8]}...[/dim]")
+                    console.print(f"[dim]Current fingerprint:  {current_fingerprint[:8]}...[/dim]")
+                    console.print("[yellow]Clearing checkpoints to force re-analysis...[/yellow]")
+                    review_state.dir_fingerprint = current_fingerprint
+                    review_state.status = "in_progress"
+                    review_state.checkpoints = []
+                    review_state.findings = []
+                    review_state.synthesis = None
+                    review_manager.save_review(review_state)
             else:
                 if matching_id:
                     console.print(f"[yellow]Found matching review: {matching_id}[/yellow]")
                     resume = input("Resume this review? [Y/n]: ").strip().lower()
                     if resume in ("", "y", "yes"):
                         review_state = review_manager.load_review(matching_id)
+                        # Check if codebase has changed
+                        if review_state.dir_fingerprint != current_fingerprint:
+                            console.print(f"\n[yellow]⚠ Codebase has changed since this review was created![/yellow]")
+                            console.print(f"[dim]Original fingerprint: {review_state.dir_fingerprint[:8]}...[/dim]")
+                            console.print(f"[dim]Current fingerprint:  {current_fingerprint[:8]}...[/dim]")
+                            choice = input("\nHow would you like to proceed?\n  [1] Re-analyze changed files (recommended)\n  [2] Continue with old analysis (may be outdated)\nEnter choice [1-2] (default: 1): ").strip()
+                            if choice == "2":
+                                console.print("[yellow]Continuing with old analysis (codebase may have changed)[/yellow]")
+                            else:  # default or "1"
+                                review_state.dir_fingerprint = current_fingerprint
+                                review_state.status = "in_progress"
+                                review_state.checkpoints = []
+                                review_state.findings = []
+                                review_state.synthesis = None
+                                review_manager.save_review(review_state)
+                                console.print("[green]Re-analyzing with updated codebase...[/green]")
                     else:
-                        review_state = review_manager.create_review(str(repo_path), question, dir_fingerprint)
+                        review_state = review_manager.create_review(str(repo_path), question, current_fingerprint)
                 else:
-                    review_state = review_manager.create_review(str(repo_path), question, dir_fingerprint)
+                    review_state = review_manager.create_review(str(repo_path), question, current_fingerprint)
         
         console.print(f"[dim]Review ID: {review_state.review_id}[/dim]")
 
@@ -1339,18 +1390,29 @@ def main() -> None:
 
     console.print(f"\nFound [bold]{len(files)}[/bold] files to analyze.")
 
-    prioritized_info = analyzer.run_prioritization_stage(
-        files, question, args.debug, args.prioritize_top
-    )
-    
-    # Save checkpoint after prioritization
+    # Check if prioritization stage was already completed
+    prioritization_checkpoint = None
     if review_state:
-        review_manager.add_checkpoint(
-            review_state.review_id,
-            "prioritization",
-            {"prioritized_files": prioritized_info or []},
-            files_analyzed=[str(f) for f in files[:20]]  # First 20 for checkpoint
+        prioritization_checkpoint = next(
+            (cp for cp in review_state.checkpoints if cp.stage == "prioritization"), None
         )
+    
+    if prioritization_checkpoint:
+        console.print("[dim]✓ Prioritization stage already completed, loading from checkpoint...[/dim]")
+        prioritized_info = prioritization_checkpoint.data.get("prioritized_files", [])
+    else:
+        prioritized_info = analyzer.run_prioritization_stage(
+            files, question, args.debug, args.prioritize_top
+        )
+        
+        # Save checkpoint after prioritization
+        if review_state:
+            review_manager.add_checkpoint(
+                review_state.review_id,
+                "prioritization",
+                {"prioritized_files": prioritized_info or []},
+                files_analyzed=[str(f) for f in files[:20]]  # First 20 for checkpoint
+            )
 
     files_to_analyze = files
     if prioritized_info:
@@ -1384,39 +1446,76 @@ def main() -> None:
         prioritized_filenames = {item["file_name"] for item in prioritized_info if "file_name" in item}
         files_to_analyze = [p for p in files if p.name in prioritized_filenames]
 
-    findings = analyzer.run_deep_dive_stage(
-        files_to_analyze, question, args.verbose, args.debug, args.threshold
-    )
+    # Check if deep dive stage was already completed
+    deep_dive_checkpoint = None
+    if review_state:
+        deep_dive_checkpoint = next(
+            (cp for cp in review_state.checkpoints if cp.stage == "deep_dive"), None
+        )
+    
+    if deep_dive_checkpoint and review_state.findings:
+        console.print("[dim]✓ Deep dive stage already completed, loading findings from checkpoint...[/dim]")
+        # Convert stored findings (dicts) back to Finding objects
+        findings = [
+            Finding.from_dict(
+                f, 
+                f.get("file_path", ""), 
+                f.get("relevance", "MEDIUM")
+            ) for f in review_state.findings
+        ]
+        # Restore optional fields
+        for i, f in enumerate(findings):
+            if i < len(review_state.findings):
+                stored = review_state.findings[i]
+                if "line_number" in stored:
+                    f.line_number = stored.get("line_number")
+                if "annotated_snippet" in stored:
+                    f.annotated_snippet = stored.get("annotated_snippet")
+    else:
+        findings = analyzer.run_deep_dive_stage(
+            files_to_analyze, question, args.verbose, args.debug, args.threshold
+        )
+        
+        # Save checkpoint after deep dive
+        if review_state:
+            review_manager.update_findings(review_state.review_id, findings)
+            # Update files_analyzed in review state
+            state = review_manager.load_review(review_state.review_id)
+            state.files_analyzed = [str(f) for f in files_to_analyze]
+            review_manager.save_review(state)
+            review_manager.add_checkpoint(
+                review_state.review_id,
+                "deep_dive",
+                {"findings_count": len(findings)},
+                files_analyzed=[str(f) for f in files_to_analyze],
+                findings_count=len(findings)
+            )
 
     impact_order = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
     findings.sort(key=lambda f: impact_order.get(f.impact, 0), reverse=True)
-    
-    # Save checkpoint after deep dive
-    if review_state:
-        review_manager.update_findings(review_state.review_id, findings)
-        # Update files_analyzed in review state
-        state = review_manager.load_review(review_state.review_id)
-        state.files_analyzed = [str(f) for f in files_to_analyze]
-        review_manager.save_review(state)
-        review_manager.add_checkpoint(
-            review_state.review_id,
-            "deep_dive",
-            {"findings_count": len(findings)},
-            files_analyzed=[str(f) for f in files_to_analyze],
-            findings_count=len(findings)
-        )
 
-    synthesis = analyzer.run_synthesis_stage(findings, question)
-    
-    # Save checkpoint after synthesis
+    # Check if synthesis stage was already completed
+    synthesis_checkpoint = None
     if review_state:
-        review_manager.update_synthesis(review_state.review_id, synthesis)
-        review_manager.add_checkpoint(
-            review_state.review_id,
-            "synthesis",
-            {"synthesis_length": len(synthesis)},
-            findings_count=len(findings)
+        synthesis_checkpoint = next(
+            (cp for cp in review_state.checkpoints if cp.stage == "synthesis"), None
         )
+    
+    if synthesis_checkpoint and review_state.synthesis:
+        console.print("[dim]✓ Synthesis stage already completed, loading from checkpoint...[/dim]")
+        synthesis = review_state.synthesis
+    else:
+        synthesis = analyzer.run_synthesis_stage(findings, question)
+        
+        # Save checkpoint after synthesis
+        if review_state:
+            review_manager.update_synthesis(review_state.review_id, synthesis)
+            review_manager.add_checkpoint(
+                review_state.review_id,
+                "synthesis",
+                {"synthesis_length": len(synthesis)},
+                findings_count=len(findings)
+            )
 
     report = AnalysisReport(
         repo_path=str(repo_path),
