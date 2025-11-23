@@ -739,20 +739,43 @@ def main() -> None:
                 console.print("[yellow]No reviews found.[/yellow]")
                 return
             
-            table = Table(title="Available Reviews")
-            table.add_column("Review ID", style="cyan")
-            table.add_column("Repository", style="magenta")
-            table.add_column("Question", style="green")
-            table.add_column("Status", style="yellow")
-            table.add_column("Updated", style="dim")
+            table = Table(title="Available Reviews", show_header=True, header_style="bold magenta")
+            table.add_column("Review ID", style="cyan", width=12)
+            table.add_column("Repository Path", style="magenta", width=40, overflow="fold")
+            table.add_column("Question", style="green", width=50, overflow="fold")
+            table.add_column("Status", style="yellow", width=10)
+            table.add_column("Last Updated", style="dim", width=20)
             
             for review in reviews[:20]:  # Limit to 20 most recent
+                # Format repository path - show full path, but truncate if too long
+                repo_display = review.repo_path
+                if len(repo_display) > 40:
+                    # Show last 40 chars if path is too long
+                    repo_display = "..." + repo_display[-37:]
+                
+                # Format timestamp - show full datetime
+                try:
+                    # Try to parse and format the timestamp nicely
+                    if "T" in review.updated_at:
+                        # ISO format with T
+                        dt = datetime.fromisoformat(review.updated_at.replace("Z", "+00:00"))
+                    else:
+                        # Try parsing as space-separated format
+                        dt = datetime.strptime(review.updated_at, "%Y-%m-%d %H:%M:%S")
+                    timestamp_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+                except (ValueError, AttributeError):
+                    # Fallback to original if parsing fails
+                    timestamp_str = review.updated_at[:19] if len(review.updated_at) >= 19 else review.updated_at
+                
+                # Truncate question if too long
+                question_display = review.question[:47] + "..." if len(review.question) > 50 else review.question
+                
                 table.add_row(
                     review.review_id,
-                    Path(review.repo_path).name,
-                    review.question[:50] + "..." if len(review.question) > 50 else review.question,
+                    repo_display,
+                    question_display,
                     review.status,
-                    review.updated_at[:10]  # Just date
+                    timestamp_str
                 )
             console.print(table)
             if len(reviews) > 20:
@@ -785,9 +808,6 @@ def main() -> None:
         
         if args.print_review:
             try:
-                from models import Finding
-                from output_manager import OutputManager
-                
                 review = context.load_review(args.print_review)
                 
                 # Convert findings from dicts to Finding objects
@@ -809,7 +829,6 @@ def main() -> None:
                             f.annotated_snippet = stored.get("annotated_snippet")
                 
                 # Create a report
-                from models import AnalysisReport
                 report = AnalysisReport(
                     repo_path=review.repo_path,
                     question=review.question,
@@ -1015,15 +1034,19 @@ def main() -> None:
     # Initialize review state management (if enabled)
     review_state = None
     if CONTEXT_AVAILABLE and context and (args.enable_review_state or args.resume_review or args.resume_last):
-        # Compute fingerprint only when needed (for change detection)
-        # This can be slow on large repos, so we do it lazily
-        current_fingerprint = None  # Will be computed only if needed
+        # Compute fingerprint when needed (for change detection)
+        # This can be slow on large repos, so we compute it lazily
+        current_fingerprint = None  # Will be computed when needed
         
         if args.resume_review:
             try:
                 review_state = context.load_review(args.resume_review)
                 console.print(f"[green]✓ Resuming review: {review_state.review_id}[/green]")
                 console.print(f"[dim]Previous question: {review_state.question}[/dim]")
+                
+                # Compute current fingerprint for comparison
+                if current_fingerprint is None:
+                    current_fingerprint = context.compute_dir_fingerprint(repo_path)
                 
                 # Check if codebase has changed
                 if review_state.dir_fingerprint != current_fingerprint:
@@ -1032,6 +1055,8 @@ def main() -> None:
                     console.print(f"[dim]Current fingerprint:  {current_fingerprint[:8]}...[/dim]")
                     choice = input("\nHow would you like to proceed?\n  [1] Re-analyze changed files (recommended)\n  [2] Continue with old analysis (may be outdated)\n  [3] Start fresh review\nEnter choice [1-3] (default: 1): ").strip()
                     if choice == "3":
+                        if current_fingerprint is None:
+                            current_fingerprint = context.compute_dir_fingerprint(repo_path)
                         review_state = context.create_review(repo_path, question, current_fingerprint)
                         console.print("[green]Starting fresh review...[/green]")
                     elif choice == "2":
@@ -1054,8 +1079,14 @@ def main() -> None:
                         question = review_state.question
             except FileNotFoundError:
                 console.print(f"[yellow]Review '{args.resume_review}' not found. Starting new review.[/yellow]")
+                if current_fingerprint is None:
+                    current_fingerprint = context.compute_dir_fingerprint(repo_path)
                 review_state = context.create_review(repo_path, question, current_fingerprint)
         else:
+            # Compute current fingerprint for matching
+            if current_fingerprint is None:
+                current_fingerprint = context.compute_dir_fingerprint(repo_path)
+            
             # Check for matching review by directory fingerprint
             matching_id = context.find_matching_review(repo_path, current_fingerprint)
             if args.resume_last and matching_id:
@@ -1074,11 +1105,15 @@ def main() -> None:
                     review_state.synthesis = None
                     context.save_review(review_state)
             else:
+                # Not using --resume-last, or no matching review found
                 if matching_id:
                     console.print(f"[yellow]Found matching review: {matching_id}[/yellow]")
                     resume = input("Resume this review? [Y/n]: ").strip().lower()
                     if resume in ("", "y", "yes"):
                         review_state = context.load_review(matching_id)
+                        # Compute current fingerprint if not already computed
+                        if current_fingerprint is None:
+                            current_fingerprint = context.compute_dir_fingerprint(repo_path)
                         # Check if codebase has changed
                         if review_state.dir_fingerprint != current_fingerprint:
                             console.print(f"\n[yellow]⚠ Codebase has changed since this review was created![/yellow]")
@@ -1096,8 +1131,12 @@ def main() -> None:
                                 context.save_review(review_state)
                                 console.print("[green]Re-analyzing with updated codebase...[/green]")
                     else:
+                        if current_fingerprint is None:
+                            current_fingerprint = context.compute_dir_fingerprint(repo_path)
                         review_state = context.create_review(repo_path, question, current_fingerprint)
                 else:
+                    if current_fingerprint is None:
+                        current_fingerprint = context.compute_dir_fingerprint(repo_path)
                     review_state = context.create_review(repo_path, question, current_fingerprint)
         
         console.print(f"[dim]Review ID: {review_state.review_id}[/dim]")
