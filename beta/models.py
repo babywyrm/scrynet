@@ -85,3 +85,4 @@ class AnalysisReport:
     insights: List[Finding]
     synthesis: str
 
+

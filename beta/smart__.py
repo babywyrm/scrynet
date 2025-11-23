@@ -118,7 +118,7 @@ class SmartAnalyzer:
         if not prompt or len(prompt) > 100_000:
             self.console.print(f"[red]Invalid prompt length: {len(prompt)} bytes (max 100,000)[/red]")
             return None
-        
+
         # Check cache using context manager
         print(f"[DEBUG] Checking cache...", file=sys.stderr, flush=True)
         cached = None
@@ -354,9 +354,9 @@ class SmartAnalyzer:
 
                             self.console.print(finding_text)
                             self.console.print("")  # Add vertical space for readability
-                
-                progress.advance(task)
-                time.sleep(0.5)  # Reduced delay since we have progress bar
+                    
+                    progress.advance(task)
+                    time.sleep(0.5)  # Reduced delay since we have progress bar
         
         self.console.print(f"\n[green]✓ Deep dive complete. Found {len(findings)} total insights.[/green]")
         return findings
@@ -699,6 +699,11 @@ def create_parser() -> argparse.ArgumentParser:
             metavar="REVIEW_ID",
             help="Print full report of a specific review and exit"
         )
+        p.add_argument(
+            "--verbose-review",
+            action="store_true",
+            help="Show all findings with code snippets and detailed recommendations (use with --print-review)"
+        )
     
     p.add_argument(
         "--help-examples",
@@ -817,6 +822,92 @@ def main() -> None:
                 # Print the report using OutputManager
                 output_mgr = OutputManager(console)
                 output_mgr.display_console_summary(report)
+                
+                # If verbose-review flag is set, show all findings with detailed info
+                if args.verbose_review:
+                    console.print("\n[bold cyan]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold cyan]")
+                    console.print("[bold cyan]Detailed Findings Report (Verbose Mode)[/bold cyan]")
+                    console.print("[bold cyan]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold cyan]\n")
+                    
+                    # Group findings by file
+                    from collections import defaultdict
+                    findings_by_file = defaultdict(list)
+                    for finding in findings:
+                        findings_by_file[finding.file_path].append(finding)
+                    
+                    # Sort by impact level
+                    impact_order = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
+                    
+                    for file_path, file_findings in sorted(findings_by_file.items()):
+                        file_findings.sort(key=lambda f: impact_order.get(f.impact, 0), reverse=True)
+                        file_name = Path(file_path).name
+                        console.print(f"\n[bold yellow]📄 {file_name}[/bold yellow]")
+                        console.print(f"[dim]{file_path}[/dim]\n")
+                        
+                        # Try to read the file to show code context
+                        try:
+                            file_content = Path(file_path).read_text(encoding="utf-8", errors="ignore")
+                            lines = file_content.splitlines()
+                        except Exception:
+                            lines = []
+                            file_content = ""
+                        
+                        for finding in file_findings:
+                            # Show finding details
+                            impact_color = {
+                                "CRITICAL": "red",
+                                "HIGH": "yellow",
+                                "MEDIUM": "cyan",
+                                "LOW": "dim"
+                            }.get(finding.impact, "white")
+                            
+                            console.print(f"  [{impact_color}]● {finding.finding}[/{impact_color}]")
+                            console.print(f"    [dim]Impact: {finding.impact} | Confidence: {finding.confidence} | CWE: {finding.cwe}[/dim]")
+                            if finding.line_number:
+                                console.print(f"    [dim]Line: {finding.line_number}[/dim]")
+                            console.print(f"    [green]Recommendation:[/green] {finding.recommendation}")
+                            
+                            # Show annotated snippet if available
+                            if finding.annotated_snippet:
+                                lexer_name = "java" if ".java" in finding.file_path else "python"
+                                syntax = Syntax(
+                                    finding.annotated_snippet,
+                                    lexer_name,
+                                    theme="monokai",
+                                    line_numbers=True
+                                )
+                                console.print(Panel(
+                                    syntax,
+                                    title=f"[cyan]Code with Fix Suggestion[/cyan]",
+                                    border_style="magenta"
+                                ))
+                            # Otherwise, show code context around the line
+                            elif finding.line_number and lines:
+                                try:
+                                    line_num = int(finding.line_number)
+                                    if 0 < line_num <= len(lines):
+                                        # Show 5 lines before and after
+                                        start = max(0, line_num - 6)
+                                        end = min(len(lines), line_num + 5)
+                                        context_lines = lines[start:end]
+                                        context_code = "\n".join(context_lines)
+                                        lexer_name = "java" if ".java" in finding.file_path else "python"
+                                        syntax = Syntax(
+                                            context_code,
+                                            lexer_name,
+                                            theme="monokai",
+                                            line_numbers=True,
+                                            start_line=start + 1
+                                        )
+                                        console.print(Panel(
+                                            syntax,
+                                            title=f"[yellow]Code Context (Line {line_num} highlighted)[/yellow]",
+                                            border_style="yellow"
+                                        ))
+                                except (ValueError, TypeError):
+                                    pass
+                            
+                            console.print()  # Blank line between findings
                 
                 # Also show checkpoints and metadata
                 console.print(f"\n[bold]Review Metadata[/bold]")
