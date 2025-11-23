@@ -58,9 +58,22 @@ Typical static analysis runs on every file, regardless of context — often prod
 
 ## Usage
 
+### Quick Help
 ```bash
-python3 smart_analyzer.py -h
+# Standard help
+python3 smart__.py -h
+
+# Comprehensive examples and scenarios
+python3 smart__.py --help-examples
 ```
+
+The `--help-examples` flag shows:
+- Common usage scenarios
+- Review state management examples
+- Cache management commands
+- Workflow examples
+- Troubleshooting tips
+- Best practices
 
 ```
 usage: smart_analyzer.py [-h] [-v] [--debug]

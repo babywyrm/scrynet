@@ -13,6 +13,15 @@ Stages:
 from __future__ import annotations
 
 import argparse
+import sys
+
+# Check for --help-examples before importing heavy dependencies
+if "--help-examples" in sys.argv:
+    from help_examples import print_help_examples, print_quick_reference
+    print_help_examples()
+    print_quick_reference()
+    sys.exit(0)
+
 import difflib
 import functools
 import hashlib
@@ -20,7 +29,6 @@ import html
 import json
 import os
 import re
-import sys
 import time
 from dataclasses import dataclass, asdict, field
 from datetime import datetime, timezone
@@ -1193,12 +1201,29 @@ def create_parser() -> argparse.ArgumentParser:
             help="Show status of a specific review and exit"
         )
     
+    p.add_argument(
+        "--help-examples",
+        action="store_true",
+        help="Show comprehensive usage examples and scenarios"
+    )
+    
     return p
 
 
 def main() -> None:
     args = create_parser().parse_args()
     console = Console()
+    
+    # Handle help examples (already handled at top of file, but keep as fallback)
+    if args.help_examples:
+        try:
+            from help_examples import print_help_examples, print_quick_reference
+            print_help_examples()
+            print_quick_reference()
+        except ImportError:
+            console.print("[yellow]Help examples module not available[/yellow]")
+            console.print("Run: python3 help_examples.py")
+        return
 
     # Handle review state management commands (if available)
     if CONTEXT_AVAILABLE:
