@@ -42,12 +42,12 @@ if str(_BETA_DIR) not in sys.path:
 
 from prompts import PromptFactory
 
-# Optional review state management (only imported if needed)
+# Unified context management library
 try:
-    from review_state import ReviewStateManager
-    REVIEW_STATE_AVAILABLE = True
+    from scrynet_context import ReviewContextManager
+    CONTEXT_AVAILABLE = True
 except ImportError:
-    REVIEW_STATE_AVAILABLE = False
+    CONTEXT_AVAILABLE = False
 
 
 # ---------- Constants ----------
@@ -143,7 +143,8 @@ class AnalysisReport:
     synthesis: str
 
 
-# ---------- Cache Manager ----------
+# CacheManager removed - now using ReviewContextManager from scrynet_context
+# (Keeping ConversationLog for backward compatibility if needed)
 class CacheManager:
     def __init__(self, cache_dir: str, use_cache: bool = True):
         self.cache_dir = Path(cache_dir)
@@ -376,16 +377,15 @@ def retry_with_backoff(max_retries: int = 3, base_delay: float = 1.0, max_delay:
 
 
 class SmartAnalyzer:
-    def __init__(self, console: Console, client: anthropic.Anthropic, cache: CacheManager, *, model: str, default_max_tokens: int, temperature: float, repo_root: Optional[Path] = None, max_retries: int = 3):
+    def __init__(self, console: Console, client: anthropic.Anthropic, context: Optional[ReviewContextManager], *, model: str, default_max_tokens: int, temperature: float, repo_root: Optional[Path] = None, max_retries: int = 3):
         self.console = console
         self.client = client
-        self.cache = cache
+        self.context = context  # ReviewContextManager handles both cache and review state
         self.model = model
         self.default_max_tokens = default_max_tokens
         self.temperature = temperature
         self.repo_root = repo_root
         self.max_retries = max_retries
-        self.cost_tracker = CostTracker()
 
     def _call_claude_api(self, prompt: str, max_tokens: int) -> anthropic.types.Message:
         """Make API call with retry logic."""
@@ -408,10 +408,17 @@ class SmartAnalyzer:
             self.console.print(f"[red]Invalid prompt length: {len(prompt)} bytes (max 100,000)[/red]")
             return None
         
-        cached = self.cache.get(stage, file, prompt, repo_path=repo_path, model=self.model)
+        # Check cache using context manager
+        cached = None
+        if self.context:
+            cached = self.context.get_cached_response(
+                stage, prompt, file=file, repo_path=repo_path, model=self.model
+            )
+        
         if cached:
             self.console.print(f"[dim]Cache hit for {stage} ({file or 'n/a'})[/dim]")
-            self.cost_tracker.add_usage(0, 0, cached=True)
+            if self.context:
+                self.context.track_cost(0, 0, cached=True)
             return cached.raw_response
         
         try:
@@ -427,10 +434,16 @@ class SmartAnalyzer:
                 input_tokens = len(prompt) // 4
                 output_tokens = len(raw) // 4
             
-            self.cost_tracker.add_usage(input_tokens, output_tokens, cached=False)
+            # Track costs and save to cache
+            if self.context:
+                parsed = parse_json_response(raw)
+                self.context.save_response(
+                    stage, prompt, raw, parsed=parsed,
+                    file=file, repo_path=repo_path, model=self.model,
+                    input_tokens=input_tokens, output_tokens=output_tokens
+                )
+                self.context.track_cost(input_tokens, output_tokens, cached=False)
             
-            parsed = parse_json_response(raw)
-            self.cache.save(stage, file, prompt, raw, parsed, repo_path=repo_path, model=self.model)
             return raw
         except anthropic.APIStatusError as e:
             if e.status_code == 429:
@@ -1143,7 +1156,7 @@ def create_parser() -> argparse.ArgumentParser:
     p.add_argument("--cache-export", metavar="FILE", help="Export cache manifest to FILE and exit")
     
     # Review state management flags (optional, non-breaking)
-    if REVIEW_STATE_AVAILABLE:
+    if CONTEXT_AVAILABLE:
         p.add_argument(
             "--enable-review-state",
             action="store_true",
@@ -1178,11 +1191,11 @@ def main() -> None:
     console = Console()
 
     # Handle review state management commands (if available)
-    if REVIEW_STATE_AVAILABLE:
-        review_manager = ReviewStateManager(args.cache_dir)
+    if CONTEXT_AVAILABLE:
+        context = ReviewContextManager(args.cache_dir, use_cache=not args.no_cache, enable_cost_tracking=True)
         
         if args.list_reviews:
-            reviews = review_manager.list_reviews()
+            reviews = context.list_reviews()
             if not reviews:
                 console.print("[yellow]No reviews found.[/yellow]")
                 return
@@ -1209,7 +1222,7 @@ def main() -> None:
         
         if args.review_status:
             try:
-                review = review_manager.load_review(args.review_status)
+                review = context.load_review(args.review_status)
                 console.print(Panel(
                     f"[bold]Review ID:[/bold] {review.review_id}\n"
                     f"[bold]Repository:[/bold] {review.repo_path}\n"
@@ -1233,9 +1246,17 @@ def main() -> None:
 
     api_key = get_api_key()
     client = anthropic.Anthropic(api_key=api_key)
-    cache = CacheManager(args.cache_dir, use_cache=not args.no_cache)
+    
+    # Initialize context manager (handles both cache and review state)
+    context = None
+    if CONTEXT_AVAILABLE:
+        context = ReviewContextManager(args.cache_dir, use_cache=not args.no_cache, enable_cost_tracking=True)
+    else:
+        # Fallback: create a minimal context for backward compatibility
+        console.print("[yellow]Warning: scrynet_context not available, some features disabled[/yellow]")
+    
     analyzer = SmartAnalyzer(
-        console, client, cache, 
+        console, client, context, 
         model=args.model, 
         default_max_tokens=args.max_tokens, 
         temperature=args.temperature, 
@@ -1245,11 +1266,17 @@ def main() -> None:
 
     # Handle cache management requests
     if args.cache_info:
-        stats = cache.stats()
-        console.print(Panel(f"Dir: {stats['dir']}\nFiles: {stats['files']}\nBytes: {stats['bytes']}", title="Cache Info", border_style="blue"))
+        if not context:
+            console.print("[red]Context manager not available[/red]")
+            return
+        stats = context.cache_stats()
+        console.print(Panel(f"Dir: {stats['dir']}\nFiles: {stats['files']}\nBytes: {stats['bytes']} ({stats.get('bytes_mb', 0)} MB)", title="Cache Info", border_style="blue"))
         return
     if args.cache_list:
-        items = cache.list_entries()
+        if not context:
+            console.print("[red]Context manager not available[/red]")
+            return
+        items = context.list_cache_entries()
         if not items:
             console.print("[yellow]No cache entries found.[/yellow]")
         else:
@@ -1260,17 +1287,25 @@ def main() -> None:
             console.print(table)
         return
     if args.cache_prune is not None:
-        deleted = cache.prune_older_than(args.cache_prune)
+        if not context:
+            console.print("[red]Context manager not available[/red]")
+            return
+        deleted = context.prune_cache(args.cache_prune)
         console.print(f"[green]Pruned {deleted} cache file(s) older than {args.cache_prune} days[/green]")
         return
     if args.cache_clear:
-        deleted = cache.clear_all()
+        if not context:
+            console.print("[red]Context manager not available[/red]")
+            return
+        deleted = context.clear_cache()
         console.print(f"[green]Cleared {deleted} cache file(s)[/green]")
         return
     if args.cache_export:
-        out_file = Path(args.cache_export)
-        cache.export(out_file)
-        console.print(f"[green]Cache manifest exported to {out_file}[/green]")
+        if not context:
+            console.print("[red]Context manager not available[/red]")
+            return
+        # Note: export functionality would need to be added to ReviewContextManager
+        console.print("[yellow]Cache export not yet implemented in new context manager[/yellow]")
         return
 
     repo_path = Path(args.repo_path)
@@ -1287,13 +1322,12 @@ def main() -> None:
 
     # Initialize review state management (if enabled)
     review_state = None
-    if REVIEW_STATE_AVAILABLE and (args.enable_review_state or args.resume_review):
-        review_manager = ReviewStateManager(args.cache_dir)
-        current_fingerprint = review_manager.compute_dir_fingerprint(repo_path)
+    if CONTEXT_AVAILABLE and context and (args.enable_review_state or args.resume_review):
+        current_fingerprint = context.compute_dir_fingerprint(repo_path)
         
         if args.resume_review:
             try:
-                review_state = review_manager.load_review(args.resume_review)
+                review_state = context.load_review(args.resume_review)
                 console.print(f"[green]✓ Resuming review: {review_state.review_id}[/green]")
                 console.print(f"[dim]Previous question: {review_state.question}[/dim]")
                 
@@ -1304,7 +1338,7 @@ def main() -> None:
                     console.print(f"[dim]Current fingerprint:  {current_fingerprint[:8]}...[/dim]")
                     choice = input("\nHow would you like to proceed?\n  [1] Re-analyze changed files (recommended)\n  [2] Continue with old analysis (may be outdated)\n  [3] Start fresh review\nEnter choice [1-3] (default: 1): ").strip()
                     if choice == "3":
-                        review_state = review_manager.create_review(str(repo_path), question, current_fingerprint)
+                        review_state = context.create_review(repo_path, question, current_fingerprint)
                         console.print("[green]Starting fresh review...[/green]")
                     elif choice == "2":
                         console.print("[yellow]Continuing with old analysis (codebase may have changed)[/yellow]")
@@ -1316,7 +1350,7 @@ def main() -> None:
                         review_state.checkpoints = []
                         review_state.findings = []
                         review_state.synthesis = None
-                        review_manager.save_review(review_state)
+                        context.save_review(review_state)
                         console.print("[green]Re-analyzing with updated codebase...[/green]")
                 
                 # Optionally use previous question if not provided
@@ -1326,12 +1360,12 @@ def main() -> None:
                         question = review_state.question
             except FileNotFoundError:
                 console.print(f"[yellow]Review '{args.resume_review}' not found. Starting new review.[/yellow]")
-                review_state = review_manager.create_review(str(repo_path), question, current_fingerprint)
+                review_state = context.create_review(repo_path, question, current_fingerprint)
         else:
             # Check for matching review by directory fingerprint
-            matching_id = review_manager.find_matching_review(str(repo_path), current_fingerprint)
+            matching_id = context.find_matching_review(repo_path, current_fingerprint)
             if args.resume_last and matching_id:
-                review_state = review_manager.load_review(matching_id)
+                review_state = context.load_review(matching_id)
                 console.print(f"[green]✓ Auto-resumed latest matching review: {matching_id}[/green]")
                 # Check if codebase has changed (even if fingerprint matched, files might have changed)
                 if review_state.dir_fingerprint != current_fingerprint:
@@ -1344,13 +1378,13 @@ def main() -> None:
                     review_state.checkpoints = []
                     review_state.findings = []
                     review_state.synthesis = None
-                    review_manager.save_review(review_state)
+                    context.save_review(review_state)
             else:
                 if matching_id:
                     console.print(f"[yellow]Found matching review: {matching_id}[/yellow]")
                     resume = input("Resume this review? [Y/n]: ").strip().lower()
                     if resume in ("", "y", "yes"):
-                        review_state = review_manager.load_review(matching_id)
+                        review_state = context.load_review(matching_id)
                         # Check if codebase has changed
                         if review_state.dir_fingerprint != current_fingerprint:
                             console.print(f"\n[yellow]⚠ Codebase has changed since this review was created![/yellow]")
@@ -1365,12 +1399,12 @@ def main() -> None:
                                 review_state.checkpoints = []
                                 review_state.findings = []
                                 review_state.synthesis = None
-                                review_manager.save_review(review_state)
+                                context.save_review(review_state)
                                 console.print("[green]Re-analyzing with updated codebase...[/green]")
                     else:
-                        review_state = review_manager.create_review(str(repo_path), question, current_fingerprint)
+                        review_state = context.create_review(repo_path, question, current_fingerprint)
                 else:
-                    review_state = review_manager.create_review(str(repo_path), question, current_fingerprint)
+                    review_state = context.create_review(repo_path, question, current_fingerprint)
         
         console.print(f"[dim]Review ID: {review_state.review_id}[/dim]")
 
@@ -1406,8 +1440,8 @@ def main() -> None:
         )
         
         # Save checkpoint after prioritization
-        if review_state:
-            review_manager.add_checkpoint(
+        if review_state and context:
+            context.add_checkpoint(
                 review_state.review_id,
                 "prioritization",
                 {"prioritized_files": prioritized_info or []},
@@ -1477,13 +1511,13 @@ def main() -> None:
         )
         
         # Save checkpoint after deep dive
-        if review_state:
-            review_manager.update_findings(review_state.review_id, findings)
+        if review_state and context:
+            context.update_findings(review_state.review_id, findings)
             # Update files_analyzed in review state
-            state = review_manager.load_review(review_state.review_id)
+            state = context.load_review(review_state.review_id)
             state.files_analyzed = [str(f) for f in files_to_analyze]
-            review_manager.save_review(state)
-            review_manager.add_checkpoint(
+            context.save_review(state)
+            context.add_checkpoint(
                 review_state.review_id,
                 "deep_dive",
                 {"findings_count": len(findings)},
@@ -1508,9 +1542,9 @@ def main() -> None:
         synthesis = analyzer.run_synthesis_stage(findings, question)
         
         # Save checkpoint after synthesis
-        if review_state:
-            review_manager.update_synthesis(review_state.review_id, synthesis)
-            review_manager.add_checkpoint(
+        if review_state and context:
+            context.update_synthesis(review_state.review_id, synthesis)
+            context.add_checkpoint(
                 review_state.review_id,
                 "synthesis",
                 {"synthesis_length": len(synthesis)},
@@ -1583,17 +1617,20 @@ def main() -> None:
                         args.diff
                     )
 
-    if args.save_conversations:
-        cache.save_session_log()
+    # Note: Session log saving removed - use context manager's built-in tracking
     
     # Mark review as completed if review state was enabled
-    if review_state:
-        review_manager.mark_completed(review_state.review_id)
+    if review_state and context:
+        context.mark_completed(review_state.review_id)
         console.print(f"\n[green]✓ Review state saved: {review_state.review_id}[/green]")
         console.print(f"[dim]Context file: .scrynet_cache/reviews/_{review_state.review_id}_context.md[/dim]")
     
     # Display cost summary
-    cost_summary = analyzer.cost_tracker.summary(analyzer.model)
+    # Get cost summary from context manager
+    if context:
+        cost_summary = context.get_cost_summary(analyzer.model)
+    else:
+        cost_summary = {"api_calls": 0, "cache_hits": 0, "input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "estimated_cost_usd": 0.0}
     if cost_summary["api_calls"] > 0 or cost_summary["cache_hits"] > 0:
         cost_table = Table(title="API Usage Summary", show_header=True, header_style="bold magenta")
         cost_table.add_column("Metric", style="cyan")
