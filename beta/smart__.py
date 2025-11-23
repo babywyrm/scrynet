@@ -502,7 +502,9 @@ class SmartAnalyzer:
             task = progress.add_task(f"[cyan]Analyzing {len(files)} files...", total=len(files))
             
             for i, file_path in enumerate(files, 1):
-                progress.update(task, description=f"[cyan]Analyzing {file_path.name}...")
+                # Update progress bar with current file name
+                file_display = file_path.name if len(file_path.name) <= 40 else file_path.name[:37] + "..."
+                progress.update(task, description=f"[cyan]Analyzing {file_display}...", refresh=True)
                 try:
                     content = file_path.read_text(encoding="utf-8", errors="replace")
                     lines = content.splitlines()
@@ -518,10 +520,16 @@ class SmartAnalyzer:
                 else:
                     prompt = PromptFactory.deep_dive(file_path, content, question)
 
+                # Update progress bar before API call
+                progress.update(task, description=f"[cyan]Analyzing {file_display}...", refresh=True)
                 raw = self._call_claude("deep_dive", str(file_path), prompt, repo_path=str(Path(file_path).anchor or Path.cwd()))
                 if not raw:
                     progress.advance(task)
                     continue
+                
+                # Update progress bar after API call, before console output
+                progress.update(task, description=f"[cyan]Analyzing {file_display}...", refresh=True)
+                
                 if debug:
                     self.console.print(Panel(raw, title=f"RAW API RESPONSE ({file_path.name})"))
 
@@ -533,6 +541,8 @@ class SmartAnalyzer:
                         continue
 
                     file_insights: Sequence[dict] = parsed["insights"]
+                    # Update progress bar before printing results
+                    progress.update(task, description=f"[cyan]Analyzing {file_display}...", refresh=True)
                     self.console.print(f"   Relevance: {relevance}, Found: {len(file_insights)} insights")
                     for ins in file_insights:
                         findings.append(Finding.from_dict(ins, str(file_path), relevance))
@@ -1322,7 +1332,7 @@ def main() -> None:
 
     # Initialize review state management (if enabled)
     review_state = None
-    if CONTEXT_AVAILABLE and context and (args.enable_review_state or args.resume_review):
+    if CONTEXT_AVAILABLE and context and (args.enable_review_state or args.resume_review or args.resume_last):
         current_fingerprint = context.compute_dir_fingerprint(repo_path)
         
         if args.resume_review:

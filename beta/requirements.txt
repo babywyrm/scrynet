@@ -3,5 +3,6 @@
 
 anthropic>=0.18.0
 rich>=13.0.0
+typing-inspection>=0.1.0
 
 
