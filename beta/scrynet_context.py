@@ -457,10 +457,20 @@ class ReviewContextManager:
     def _namespace_dir(
         self,
         repo_path: Optional[Union[str, Path]],
-        model: Optional[str]
+        model: Optional[str],
+        mode: Optional[str] = None
     ) -> Path:
-        """Return namespaced cache directory for a given repo/model pair."""
+        """
+        Return namespaced cache directory for a given repo/model/mode combination.
+        
+        Args:
+            repo_path: Repository path for namespacing
+            model: Model name for namespacing
+            mode: Optional mode identifier (e.g., "ctf", "smart") to separate different analysis types
+        """
         ns_parts = []
+        if mode:
+            ns_parts.append(mode)  # Add mode first for clear separation
         if repo_path:
             try:
                 # Use a simple hash of the repo path instead of computing fingerprint
@@ -486,7 +496,8 @@ class ReviewContextManager:
         prompt: str,
         file: Optional[str] = None,
         repo_path: Optional[Union[str, Path]] = None,
-        model: Optional[str] = None
+        model: Optional[str] = None,
+        mode: Optional[str] = None
     ) -> Optional[CachedResponse]:
         """
         Get cached API response if available.
@@ -497,6 +508,7 @@ class ReviewContextManager:
             file: Optional file path being analyzed
             repo_path: Optional repository path for namespacing
             model: Optional model name for namespacing
+            mode: Optional mode identifier (e.g., "ctf", "smart") to separate different analysis types
             
         Returns:
             CachedResponse if found, None otherwise
@@ -505,7 +517,7 @@ class ReviewContextManager:
             return None
         
         key = self._hash_key(stage, file, prompt)
-        base = self._namespace_dir(repo_path, model)
+        base = self._namespace_dir(repo_path, model, mode=mode)
         path = base / f"{key}.json"
         
         if not path.exists():
@@ -532,7 +544,8 @@ class ReviewContextManager:
         repo_path: Optional[Union[str, Path]] = None,
         model: Optional[str] = None,
         input_tokens: int = 0,
-        output_tokens: int = 0
+        output_tokens: int = 0,
+        mode: Optional[str] = None
     ) -> CachedResponse:
         """
         Save API response to cache.
@@ -547,6 +560,7 @@ class ReviewContextManager:
             model: Optional model name for namespacing
             input_tokens: Number of input tokens
             output_tokens: Number of output tokens
+            mode: Optional mode identifier (e.g., "ctf", "smart") to separate different analysis types
             
         Returns:
             CachedResponse instance
@@ -575,7 +589,7 @@ class ReviewContextManager:
         )
         
         key = self._hash_key(stage, file, prompt)
-        base = self._namespace_dir(repo_path, model)
+        base = self._namespace_dir(repo_path, model, mode=mode)
         path = base / f"{key}.json"
         
         try:

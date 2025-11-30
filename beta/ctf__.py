@@ -91,7 +91,7 @@ class CTFAnalyzer:
         if self.context:
             try:
                 cached = self.context.get_cached_response(
-                    stage, prompt, file=file, repo_path=repo_path, model=self.model
+                    stage, prompt, file=file, repo_path=repo_path, model=self.model, mode="ctf"
                 )
             except Exception:
                 pass
@@ -122,7 +122,8 @@ class CTFAnalyzer:
                 self.context.save_response(
                     stage, prompt, raw, parsed=parsed,
                     file=file, repo_path=repo_path, model=self.model,
-                    input_tokens=input_tokens, output_tokens=output_tokens
+                    input_tokens=input_tokens, output_tokens=output_tokens,
+                    mode="ctf"
                 )
                 self.context.track_cost(input_tokens, output_tokens, cached=False)
             
@@ -356,12 +357,12 @@ def main() -> None:
         context = ReviewContextManager(args.cache_dir, use_cache=not args.no_cache, enable_cost_tracking=True)
         
         if args.cache_info:
-            stats = context.get_cache_stats()
+            stats = context.cache_stats()
             console.print(Panel(
                 f"[bold]Cache Statistics[/bold]\n"
-                f"Total entries: {stats.get('total_entries', 0)}\n"
-                f"Total size: {stats.get('total_size_mb', 0):.2f} MB\n"
-                f"Cost saved: ${stats.get('cost_saved', 0):.2f}",
+                f"Cache directory: {stats.get('dir', 'N/A')}\n"
+                f"Total entries: {stats.get('files', 0)}\n"
+                f"Total size: {stats.get('bytes_mb', 0):.2f} MB ({stats.get('bytes', 0):,} bytes)",
                 title="Cache Info",
                 border_style="blue"
             ))

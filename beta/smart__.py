@@ -125,7 +125,7 @@ class SmartAnalyzer:
         if self.context:
             try:
                 cached = self.context.get_cached_response(
-                    stage, prompt, file=file, repo_path=repo_path, model=self.model
+                    stage, prompt, file=file, repo_path=repo_path, model=self.model, mode="smart"
                 )
                 print(f"[DEBUG] Cache check complete, cached={cached is not None}", file=sys.stderr, flush=True)
             except Exception as e:
@@ -164,7 +164,8 @@ class SmartAnalyzer:
                 self.context.save_response(
                     stage, prompt, raw, parsed=parsed,
                     file=file, repo_path=repo_path, model=self.model,
-                    input_tokens=input_tokens, output_tokens=output_tokens
+                    input_tokens=input_tokens, output_tokens=output_tokens,
+                    mode="smart"
                 )
                 self.context.track_cost(input_tokens, output_tokens, cached=False)
             
