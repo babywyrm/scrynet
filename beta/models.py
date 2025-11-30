@@ -86,3 +86,4 @@ class AnalysisReport:
     synthesis: str
 
 
+
