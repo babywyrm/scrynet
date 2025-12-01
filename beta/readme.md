@@ -39,6 +39,7 @@ Typical static analysis runs on every file, regardless of context — often prod
 * **API Caching** – Speed up repeated runs with intelligent response caching.
 * **Cost Tracking** – Monitor API usage and estimate costs in real-time.
 * **Detailed Review Reports** – Print past reviews with code snippets and fix suggestions.
+* **CTF Mode** – Optimized analysis mode for Capture The Flag challenges, focusing on exploitable vulnerabilities and quick wins.
 
 ---
 
@@ -76,6 +77,7 @@ python3 smart__.py --help-examples
 
 The `--help-examples` flag shows:
 - Common usage scenarios
+- CTF mode examples and workflows
 - Review state management examples
 - Cache management commands
 - Workflow examples
@@ -100,7 +102,7 @@ usage: smart__.py [-h] [--cache-dir CACHE_DIR] [--no-cache]
                   [--cache-prune DAYS] [--cache-clear] [--cache-export FILE]
                   [--enable-review-state] [--resume-last] [--resume-review REVIEW_ID]
                   [--list-reviews] [--review-status REVIEW_ID]
-                  [--print-review REVIEW_ID] [--verbose-review] [--help-examples]
+                  [--print-review REVIEW_ID] [--verbose-review] [--ctf-mode] [--help-examples]
                   repo_path [question]
 
 positional arguments:
@@ -130,6 +132,10 @@ options:
                         Print full report of a specific review and exit
   --verbose-review      Show all findings with code snippets and detailed recommendations
                         (use with --print-review)
+  --ctf-mode           Enable CTF mode: optimized for quick vulnerability discovery and
+                        exploitation (Capture The Flag). Uses specialized prompts focused on
+                        exploitable vulnerabilities, quick wins, and CTF patterns.
+  --help-examples       Show comprehensive usage examples and scenarios
 ```
 
 ---
@@ -142,7 +148,34 @@ options:
 python3 smart__.py /path/to/repo
 ```
 
-#### 2. **Security Threat Model + Payloads**
+#### 2. **CTF Mode - Quick Vulnerability Discovery**
+
+```bash
+# CTF mode is optimized for Capture The Flag challenges
+# Focuses on exploitable vulnerabilities and quick wins
+python3 smart__.py /path/to/ctf-challenge \
+  "find all vulnerabilities and flags" \
+  --ctf-mode \
+  --top-n 10 \
+  --generate-payloads
+```
+
+**CTF Mode Features:**
+- Prioritizes entry points (login, upload, API endpoints, config files)
+- Focuses on exploitable vulnerabilities over theoretical ones
+- Generates CTF-ready exploitation payloads with expected results
+- Provides exploitation roadmaps with priority rankings
+- Highlights potential flags, secrets, and hardcoded credentials
+- Uses separate cache namespace (`ctf/`) to avoid mixing with regular analysis
+
+**When to Use CTF Mode:**
+- CTF challenges and competitions
+- Penetration testing exercises
+- Quick vulnerability discovery
+- Security training scenarios
+- When you need exploitation-focused analysis
+
+#### 3. **Security Threat Model + Payloads**
 
 ```bash
 python3 smart__.py /path/to/app \

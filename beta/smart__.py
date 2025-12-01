@@ -54,6 +54,11 @@ from common import (
 from models import AnalysisReport, Finding
 from output_manager import OutputManager
 from prompts import PromptFactory
+try:
+    from ctf_prompts import CTFPromptFactory
+    CTF_AVAILABLE = True
+except ImportError:
+    CTF_AVAILABLE = False
 
 # Unified context management library
 try:
@@ -76,7 +81,7 @@ DEFAULT_MAX_FILES: Final = 400
 
 
 class SmartAnalyzer:
-    def __init__(self, console: Console, client: anthropic.Anthropic, context: Optional[ReviewContextManager], *, model: str, default_max_tokens: int, temperature: float, repo_root: Optional[Path] = None, max_retries: int = 3):
+    def __init__(self, console: Console, client: anthropic.Anthropic, context: Optional[ReviewContextManager], *, model: str, default_max_tokens: int, temperature: float, repo_root: Optional[Path] = None, max_retries: int = 3, ctf_mode: bool = False):
         self.console = console
         self.client = client
         self.context = context  # ReviewContextManager handles both cache and review state
@@ -85,6 +90,12 @@ class SmartAnalyzer:
         self.temperature = temperature
         self.repo_root = repo_root
         self.max_retries = max_retries
+        self.ctf_mode = ctf_mode
+        # Select prompt factory based on mode
+        if ctf_mode and CTF_AVAILABLE:
+            self.prompt_factory = CTFPromptFactory
+        else:
+            self.prompt_factory = PromptFactory
 
     def _call_claude_api(self, prompt: str, max_tokens: int) -> anthropic.types.Message:
         """Make API call with retry logic."""
@@ -109,7 +120,7 @@ class SmartAnalyzer:
 
     def _call_claude(
         self, stage: str, file: Optional[str], prompt: str, max_tokens: int = 4000,
-        repo_path: Optional[str] = None
+        repo_path: Optional[str] = None, mode: Optional[str] = None
     ) -> Optional[str]:
         import sys
         print(f"[DEBUG] _call_claude called: stage={stage}, file={file}, prompt_len={len(prompt)}", file=sys.stderr, flush=True)
@@ -124,8 +135,9 @@ class SmartAnalyzer:
         cached = None
         if self.context:
             try:
+                cache_mode = "ctf" if self.ctf_mode else "smart"
                 cached = self.context.get_cached_response(
-                    stage, prompt, file=file, repo_path=repo_path, model=self.model, mode="smart"
+                    stage, prompt, file=file, repo_path=repo_path, model=self.model, mode=cache_mode
                 )
                 print(f"[DEBUG] Cache check complete, cached={cached is not None}", file=sys.stderr, flush=True)
             except Exception as e:
@@ -161,11 +173,12 @@ class SmartAnalyzer:
             # Track costs and save to cache
             if self.context:
                 parsed = parse_json_response(raw)
+                cache_mode = "ctf" if self.ctf_mode else "smart"
                 self.context.save_response(
                     stage, prompt, raw, parsed=parsed,
                     file=file, repo_path=repo_path, model=self.model,
                     input_tokens=input_tokens, output_tokens=output_tokens,
-                    mode="smart"
+                    mode=cache_mode
                 )
                 self.context.track_cost(input_tokens, output_tokens, cached=False)
             
@@ -189,10 +202,11 @@ class SmartAnalyzer:
     def run_prioritization_stage(
         self, all_files: List[Path], question: str, debug: bool, limit: int
     ) -> Optional[List[Dict[str, str]]]:
-        self.console.print("[bold]Stage 1: Prioritization[/bold]")
+        stage_title = "[bold]🎯 CTF Stage 1: Prioritization[/bold]" if self.ctf_mode else "[bold]Stage 1: Prioritization[/bold]"
+        self.console.print(stage_title)
         if not all_files:
             return None
-        prompt = PromptFactory.prioritization(all_files, question, limit)
+        prompt = self.prompt_factory.prioritization(all_files, question, limit)
         raw = self._call_claude("prioritization", None, prompt, repo_path=str(Path.cwd()))
         if not raw:
             return None
@@ -218,7 +232,8 @@ class SmartAnalyzer:
         debug: bool,
         threshold: Optional[str],
     ) -> List[Finding]:
-        self.console.print("\n[bold]Stage 2: Deep Dive[/bold]")
+        stage_title = "\n[bold]🔍 CTF Stage 2: Deep Dive Analysis[/bold]" if self.ctf_mode else "\n[bold]Stage 2: Deep Dive[/bold]"
+        self.console.print(stage_title)
         findings: List[Finding] = []
         
         with Progress(
@@ -250,11 +265,11 @@ class SmartAnalyzer:
                     continue
 
                 if file_path.suffix.lower() in YAML_EXTS:
-                    prompt = PromptFactory.deep_dive_yaml(file_path, content, question)
+                    prompt = self.prompt_factory.deep_dive_yaml(file_path, content, question)
                 elif file_path.suffix.lower() in HELM_EXTS or "templates" in file_path.parts:
-                    prompt = PromptFactory.deep_dive_helm(file_path, content, question)
+                    prompt = self.prompt_factory.deep_dive_helm(file_path, content, question)
                 else:
-                    prompt = PromptFactory.deep_dive(file_path, content, question)
+                    prompt = self.prompt_factory.deep_dive(file_path, content, question)
 
                 # Update progress bar before API call - show we're calling API
                 progress.update(
@@ -363,10 +378,11 @@ class SmartAnalyzer:
         return findings
 
     def run_synthesis_stage(self, findings: List[Finding], question: str) -> str:
-        self.console.print("\n[bold]Stage 3: Synthesis[/bold]")
+        stage_title = "\n[bold]📊 CTF Stage 3: Synthesis & Exploitation Roadmap[/bold]" if self.ctf_mode else "\n[bold]Stage 3: Synthesis[/bold]"
+        self.console.print(stage_title)
         if not findings:
             return "No insights were found to synthesize."
-        prompt = PromptFactory.synthesis(findings, question)
+        prompt = self.prompt_factory.synthesis(findings, question)
         raw = self._call_claude("synthesis", None, prompt, repo_path=str(Path.cwd()))
         self.console.print("[green]✓ Synthesis complete.[/green]\n")
         return raw or "Synthesis failed."
@@ -376,7 +392,7 @@ class SmartAnalyzer:
         for finding in top_findings:
             try:
                 content = Path(finding.file_path).read_text(encoding="utf-8", errors="ignore")
-                prompt = PromptFactory.annotation(finding, content)
+                prompt = self.prompt_factory.annotation(finding, content)
                 raw = self._call_claude("annotation", finding.file_path, prompt, repo_path=str(Path(finding.file_path).anchor or Path.cwd()))
                 if not raw:
                     continue
@@ -396,13 +412,14 @@ class SmartAnalyzer:
                 self.console.print(f"[red]Error annotating {finding.file_path}: {e}[/red]")
 
     def run_payload_generation_stage(self, top_findings: List[Finding], debug: bool) -> None:
-        self.console.print("\n[bold]Stage 4: Payload Generation[/bold]")
+        stage_title = "\n[bold]💣 CTF Stage 4: Payload Generation[/bold]" if self.ctf_mode else "\n[bold]Stage 4: Payload Generation[/bold]"
+        self.console.print(stage_title)
         for f in top_findings:
             try:
                 snippet = Path(f.file_path).read_text(encoding="utf-8", errors="ignore")
             except Exception:
                 snippet = "Could not read snippet."
-            prompt = PromptFactory.payload_generation(f, snippet[:500])
+            prompt = self.prompt_factory.payload_generation(f, snippet[:500])
             raw = self._call_claude("payload", f.file_path, prompt, repo_path=str(Path(f.file_path).anchor or Path.cwd()))
             if not raw:
                 continue
@@ -412,15 +429,51 @@ class SmartAnalyzer:
                 )
             parsed = parse_json_response(raw)
             if parsed:
-                rt, bt = parsed.get("red_team_payload", {}), parsed.get("blue_team_payload", {})
-                self.console.print(
-                    Panel(
-                        f"[bold red]Red Team[/bold red]\nPayload: `{rt.get('payload','')}`\n{rt.get('explanation','')}\n\n"
-                        f"[bold green]Blue Team[/bold green]\nPayload: `{bt.get('payload','')}`\n{bt.get('explanation','')}",
-                        title=f"Payloads for '{f.finding}'",
-                        border_style="magenta",
+                if self.ctf_mode:
+                    # CTF mode format: exploitation_payload + alternative_payloads + exploitation_steps
+                    exploit = parsed.get("exploitation_payload", {})
+                    alt_payloads = parsed.get("alternative_payloads", [])
+                    steps = parsed.get("exploitation_steps", [])
+                    
+                    exploit_text = f"[bold red]💣 Exploitation Payload[/bold red]\n"
+                    exploit_text += f"Payload: `{exploit.get('payload', 'N/A')}`\n\n"
+                    exploit_text += f"[bold]Explanation:[/bold] {exploit.get('explanation', 'N/A')}\n\n"
+                    if exploit.get('how_to_use'):
+                        exploit_text += f"[bold]How to Use:[/bold] {exploit.get('how_to_use')}\n\n"
+                    if exploit.get('expected_result'):
+                        exploit_text += f"[bold]Expected Result:[/bold] {exploit.get('expected_result')}\n"
+                    
+                    if steps:
+                        exploit_text += f"\n[bold yellow]📋 Exploitation Steps:[/bold yellow]\n"
+                        for i, step in enumerate(steps, 1):
+                            exploit_text += f"  {i}. {step}\n"
+                    
+                    if alt_payloads:
+                        exploit_text += f"\n[bold yellow]🔄 Alternative Payloads:[/bold yellow]\n"
+                        for alt in alt_payloads:
+                            exploit_text += f"  • [bold]`{alt.get('payload', 'N/A')}`[/bold]\n"
+                            exploit_text += f"    Use case: {alt.get('use_case', 'N/A')}\n"
+                            if alt.get('expected_result'):
+                                exploit_text += f"    Result: {alt.get('expected_result')}\n"
+                    
+                    self.console.print(
+                        Panel(
+                            exploit_text,
+                            title=f"💣 Exploitation Payloads for '{f.finding}'",
+                            border_style="red",
+                        )
                     )
-                )
+                else:
+                    # Regular mode format: red_team_payload + blue_team_payload
+                    rt, bt = parsed.get("red_team_payload", {}), parsed.get("blue_team_payload", {})
+                    self.console.print(
+                        Panel(
+                            f"[bold red]Red Team[/bold red]\nPayload: `{rt.get('payload','')}`\n{rt.get('explanation','')}\n\n"
+                            f"[bold green]Blue Team[/bold green]\nPayload: `{bt.get('payload','')}`\n{bt.get('explanation','')}",
+                            title=f"Payloads for '{f.finding}'",
+                            border_style="magenta",
+                        )
+                    )
             time.sleep(1)
 
     def run_code_improvement_stage(
@@ -445,7 +498,7 @@ class SmartAnalyzer:
                 self.console.print(f"  [red]Error reading {file_path}: {e}[/red]")
                 continue
             
-            prompt = PromptFactory.code_improvement(
+            prompt = self.prompt_factory.code_improvement(
                 file_path, content, focus_areas
             )
             raw = self._call_claude(
@@ -528,7 +581,7 @@ class SmartAnalyzer:
                 self.console.print(f"  [red]Error reading {file_path}: {e}[/red]")
                 continue
             
-            prompt = PromptFactory.full_code_optimization(
+            prompt = self.prompt_factory.full_code_optimization(
                 Path(file_path), content, improvements
             )
             raw = self._call_claude(
@@ -595,7 +648,23 @@ def clarify_question_interactively(question: str, console: Console) -> str:
 
 # ---------- CLI & Main ----------
 def create_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Smart Code Analyzer with caching + full features")
+    p = argparse.ArgumentParser(
+        description="Smart Code Analyzer with caching + full features. Use --ctf-mode for CTF/exploitation-focused analysis.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Regular security analysis
+  python3 smart__.py /path/to/repo "find security vulnerabilities"
+  
+  # CTF mode (optimized for quick vulnerability discovery)
+  python3 smart__.py /path/to/ctf-challenge "find vulnerabilities" --ctf-mode --generate-payloads
+  
+  # With review state management
+  python3 smart__.py /path/to/repo "find vulnerabilities" --enable-review-state --resume-last
+  
+For more examples, run: python3 smart__.py --help-examples
+        """
+    )
     p.add_argument("repo_path", help="Path to the repository to analyze")
     p.add_argument("question", nargs="?", help="Analysis question")
     p.add_argument("--cache-dir", default=".scrynet_cache", help="Directory for conversation cache")
@@ -633,6 +702,13 @@ def create_parser() -> argparse.ArgumentParser:
         "-v", "--verbose", action="store_true", help="Print findings inline with code context"
     )
     p.add_argument("--debug", action="store_true", help="Print raw API responses")
+    
+    # Analysis mode
+    p.add_argument(
+        "--ctf-mode",
+        action="store_true",
+        help="Enable CTF mode: optimized for quick vulnerability discovery and exploitation (Capture The Flag)"
+    )
     
     # Code optimization flags
     p.add_argument(
@@ -973,7 +1049,8 @@ def main() -> None:
         default_max_tokens=args.max_tokens, 
         temperature=args.temperature, 
         repo_root=None,
-        max_retries=args.max_retries
+        max_retries=args.max_retries,
+        ctf_mode=args.ctf_mode
     )
 
     # Handle cache management requests
@@ -1180,7 +1257,7 @@ def main() -> None:
                 "prioritization",
                 {"prioritized_files": prioritized_info or []},
                 files_analyzed=[str(f) for f in files[:20]]  # First 20 for checkpoint
-            )
+    )
 
     files_to_analyze = files
     if prioritized_info:
@@ -1257,7 +1334,7 @@ def main() -> None:
                 {"findings_count": len(findings)},
                 files_analyzed=[str(f) for f in files_to_analyze],
                 findings_count=len(findings)
-            )
+    )
 
     impact_order = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
     findings.sort(key=lambda f: impact_order.get(f.impact, 0), reverse=True)

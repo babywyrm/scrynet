@@ -33,6 +33,16 @@ python3 smart__.py /path/to/repo "find injection vulnerabilities" \\
   --generate-payloads --top-n 5
 ```
 
+### CTF Mode - Quick Vulnerability Discovery
+```bash
+# CTF mode is optimized for Capture The Flag challenges
+# Focuses on exploitable vulnerabilities and quick wins
+python3 smart__.py /path/to/ctf-challenge "find all vulnerabilities and flags" \\
+  --ctf-mode \\
+  --top-n 10 \\
+  --generate-payloads
+```
+
 ---
 
 ## Review State Management
@@ -113,6 +123,63 @@ python3 smart__.py . --cache-clear
 ```bash
 python3 smart__.py . --cache-export cache_manifest.json
 ```
+
+---
+
+## CTF Mode - Capture The Flag Analysis
+
+CTF mode is specifically optimized for finding exploitable vulnerabilities quickly in CTF challenges. It uses specialized prompts focused on:
+- Quick wins and high-impact vulnerabilities
+- Exploitation paths and payloads
+- Common CTF patterns (SQL injection, command injection, file inclusion, etc.)
+- Hardcoded secrets and flags
+- Authentication bypasses
+
+### CTF Quick Scan
+```bash
+python3 smart__.py /path/to/ctf-challenge \\
+  "find all security vulnerabilities and flags" \\
+  --ctf-mode \\
+  --top-n 10 \\
+  --generate-payloads \\
+  --max-files 20
+```
+
+### CTF Focused on Entry Points
+```bash
+python3 smart__.py /path/to/ctf-challenge \\
+  "find the top entry points for exploitation" \\
+  --ctf-mode \\
+  --prioritize-top 5 \\
+  --generate-payloads \\
+  --threshold HIGH
+```
+
+### CTF with Full Exploitation Roadmap
+```bash
+python3 smart__.py /path/to/ctf-challenge \\
+  "find all exploitable vulnerabilities" \\
+  --ctf-mode \\
+  --top-n 15 \\
+  --generate-payloads \\
+  --annotate-code \\
+  --enable-review-state
+```
+
+**CTF Mode Features:**
+- Prioritizes entry points (login, upload, API endpoints)
+- Focuses on exploitable vulnerabilities over theoretical ones
+- Generates CTF-ready exploitation payloads
+- Provides exploitation roadmaps with priority rankings
+- Highlights potential flags and secrets
+- Uses separate cache namespace (`ctf/`) to avoid mixing with regular analysis
+
+**When to Use CTF Mode:**
+- CTF challenges and competitions
+- Penetration testing exercises
+- Quick vulnerability discovery
+- Security training scenarios
+- When you need exploitation-focused analysis
 
 ---
 
@@ -398,6 +465,10 @@ def print_quick_reference():
     table.add_row(
         "Basic security scan",
         "python3 smart__.py <repo> \"find vulnerabilities\""
+    )
+    table.add_row(
+        "CTF mode (quick wins)",
+        "python3 smart__.py <repo> \"find vulnerabilities\" --ctf-mode --generate-payloads"
     )
     table.add_row(
         "Start review with state",

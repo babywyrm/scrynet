@@ -238,29 +238,39 @@ Example format:
     @staticmethod
     def payload_generation(finding: Any, code_snippet: str) -> str:
         """Generate CTF-focused exploitation payloads."""
-        return f"""You are a CTF exploitation expert. For this vulnerability, generate practical payloads for CTF exploitation.
+        return f"""You are a CTF exploitation expert. For this vulnerability, generate practical, ready-to-use payloads for CTF exploitation.
 
 VULNERABILITY CONTEXT:
 File: {finding.file_path}
 Line: {finding.line_number}
 Finding: {finding.finding}
+Recommendation: {finding.recommendation}
 
 CODE SNIPPET:
 {code_snippet}
 
 TASK:
+Generate actionable exploitation payloads that can be directly used in a CTF challenge. Be specific and practical.
+
 Provide your response in a single, clean JSON object with the following structure. Do not include any text outside the JSON.
 {{
   "exploitation_payload": {{
-    "payload": "A working payload to exploit this vulnerability in a CTF context",
-    "explanation": "How this payload works and what it achieves",
-    "expected_result": "What you should see when this payload works (e.g., flag output, RCE, file read)"
+    "payload": "A working, ready-to-use payload to exploit this vulnerability (e.g., SQL injection string, path traversal path, command injection command)",
+    "explanation": "Step-by-step explanation of how this payload works and why it exploits the vulnerability",
+    "expected_result": "Specific expected outcome (e.g., 'Bypass authentication and login as admin', 'Read /etc/passwd file contents', 'Execute arbitrary commands', 'Retrieve flag from database')",
+    "how_to_use": "Practical instructions on where and how to use this payload (e.g., 'Inject in username field', 'Use as filename in upload', 'Send as POST parameter')"
   }},
   "alternative_payloads": [
     {{
-      "payload": "Alternative payload variant",
-      "use_case": "When to use this variant"
+      "payload": "Alternative payload variant (e.g., encoded, obfuscated, or different technique)",
+      "use_case": "When to use this variant (e.g., 'If basic payload is filtered', 'For URL-encoded contexts', 'To bypass WAF')",
+      "expected_result": "What this alternative achieves"
     }}
+  ],
+  "exploitation_steps": [
+    "Step 1: [Specific action to take]",
+    "Step 2: [Next action]",
+    "Step 3: [Final action to achieve goal]"
   ]
 }}"""
 
