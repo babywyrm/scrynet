@@ -414,6 +414,12 @@ class Orchestrator:
                     if self._meets_severity_threshold(item.get("severity", "")):
                         item['source'] = f'claude-{profile}'
                         item['file'] = str(fpath)
+                        # Normalize recommendation field - use 'fix' or 'explanation' if 'recommendation' is missing
+                        if 'recommendation' not in item or not item.get('recommendation'):
+                            item['recommendation'] = item.get('fix', item.get('explanation', item.get('description', 'N/A')))
+                        # Ensure we have a description/explanation
+                        if 'description' not in item:
+                            item['description'] = item.get('explanation', item.get('recommendation', 'N/A'))
                         processed.append(item)
                 return processed
             
@@ -577,6 +583,7 @@ class Orchestrator:
                     <th>Category</th>
                     <th>Title</th>
                     <th>Source</th>
+                    <th>Recommendation</th>
                 </tr>
             </thead>
             <tbody>
@@ -589,6 +596,9 @@ class Orchestrator:
             category = item.get('category', '')
             title = item.get('title', item.get('rule_name', ''))
             source = item.get('source', '')
+            recommendation = item.get('recommendation') or item.get('fix') or item.get('explanation') or item.get('description') or 'N/A'
+            # Truncate for table display
+            rec_display = recommendation[:150] + "..." if len(recommendation) > 150 else recommendation
             
             html_content += f"""
                 <tr>
@@ -598,6 +608,7 @@ class Orchestrator:
                     <td>{category}</td>
                     <td>{title}</td>
                     <td>{source}</td>
+                    <td>{rec_display}</td>
                 </tr>
 """
         
@@ -679,15 +690,19 @@ class Orchestrator:
                         line_num = finding.get('line_number', finding.get('line', '?'))
                         finding_title = finding.get('title', finding.get('rule_name', 'Unknown'))
                         severity = finding.get('severity', 'UNKNOWN')
+                        # Get recommendation/fix/explanation for context
+                        recommendation = finding.get('recommendation') or finding.get('fix') or finding.get('explanation') or finding.get('description') or 'N/A'
                         
-                        # Create detailed header
+                        # Create detailed header with full context
                         location_info = f"[bold cyan]📍 Location:[/bold cyan] {file_path} [dim](Line {line_num})[/dim]"
                         finding_info = f"[bold yellow]🔍 Finding:[/bold yellow] {finding_title} [dim][{severity}][/dim]"
+                        recommendation_info = f"[bold green]💡 Fix/Recommendation:[/bold green] {recommendation}"
                         
                         self.console.print(
                             Panel(
                                 f"{location_info}\n"
-                                f"{finding_info}\n\n"
+                                f"{finding_info}\n"
+                                f"{recommendation_info}\n\n"
                                 f"[bold red]🔴 Red Team Payload[/bold red]\n"
                                 f"Payload: [bold]`{rt.get('payload', 'N/A')}`[/bold]\n"
                                 f"Explanation: {rt.get('explanation', 'N/A')}\n\n"
@@ -702,16 +717,28 @@ class Orchestrator:
                         # Save to file for later reference
                         payload_file = self.output_path / "payloads" / f"payload_{Path(file_path).stem}_L{line_num}.json"
                         payload_file.parent.mkdir(parents=True, exist_ok=True)
+                        # Get recommendation from finding
+                        recommendation = finding.get('recommendation') or finding.get('fix') or finding.get('explanation') or finding.get('description') or 'N/A'
                         payload_data = {
                             "file": file_path,
                             "line": line_num,
                             "finding": finding_title,
                             "severity": severity,
+                            "recommendation": recommendation,
                             "red_team_payload": rt,
-                            "blue_team_payload": bt
+                            "blue_team_payload": bt,
+                            "category": finding.get('category', 'N/A'),
+                            "impact": finding.get('impact', 'N/A')
                         }
                         with open(payload_file, "w", encoding="utf-8") as f:
                             json.dump(payload_data, f, indent=2)
+                        # Show relative path if possible, otherwise absolute
+                        try:
+                            abs_payload_file = payload_file.resolve()
+                            rel_path = abs_payload_file.relative_to(Path.cwd().resolve())
+                            self.console.print(f"[dim]  💾 Saved to: {rel_path}[/dim]")
+                        except (ValueError, OSError):
+                            self.console.print(f"[dim]  💾 Saved to: {payload_file}[/dim]")
                 except Exception as e:
                     self.console.print(f"[red]Error generating payloads for {file_path}: {e}[/red]")
                 
@@ -756,7 +783,8 @@ class Orchestrator:
                         self.file_path = str(d.get('file', ''))
                         self.line_number = d.get('line_number', d.get('line', 0))
                         self.finding = d.get('title', d.get('rule_name', 'Unknown'))
-                        self.recommendation = d.get('recommendation', d.get('description', 'N/A'))
+                        # Try multiple fields for recommendation
+                        self.recommendation = d.get('recommendation') or d.get('fix') or d.get('explanation') or d.get('description') or 'N/A'
                 
                 finding_obj = FindingObj(finding)
                 prompt = PromptFactory.annotation(finding_obj, content)
@@ -787,7 +815,8 @@ class Orchestrator:
                         line_num = finding.get('line_number', finding.get('line', '?'))
                         finding_title = finding.get('title', finding.get('rule_name', 'Unknown'))
                         severity = finding.get('severity', 'UNKNOWN')
-                        recommendation = finding.get('recommendation', finding.get('description', 'N/A'))
+                        # Try multiple fields for recommendation (fix, explanation, recommendation, description)
+                        recommendation = finding.get('recommendation') or finding.get('fix') or finding.get('explanation') or finding.get('description') or 'N/A'
                         
                         # Detect language from file extension
                         file_ext = Path(file_path).suffix.lower()
@@ -819,17 +848,31 @@ class Orchestrator:
 **File:** `{file_path}`  
 **Line:** {line_num}  
 **Severity:** {severity}  
+**Category:** {finding.get('category', 'N/A')}  
 **Finding:** {finding_title}  
-**Recommendation:** {recommendation}
+**Impact:** {finding.get('impact', 'N/A')}  
+**Recommendation/Fix:** {recommendation}
 
-## Annotated Code
+## Vulnerable Code Context
 
 ```{language}
 {snippet}
 ```
+
+## Additional Context
+
+- **Explanation:** {finding.get('explanation', 'N/A')}
+- **Vulnerable Code:** `{finding.get('vulnerable_code', 'N/A')}`
 """
                         with open(annotation_file, "w", encoding="utf-8") as f:
                             f.write(annotation_content)
+                        # Show relative path if possible, otherwise absolute
+                        try:
+                            abs_annotation_file = annotation_file.resolve()
+                            rel_path = abs_annotation_file.relative_to(Path.cwd().resolve())
+                            self.console.print(f"[dim]  💾 Saved to: {rel_path}[/dim]")
+                        except (ValueError, OSError):
+                            self.console.print(f"[dim]  💾 Saved to: {annotation_file}[/dim]")
                 except Exception as e:
                     self.console.print(f"[red]Error annotating {file_path}: {e}[/red]")
                 
@@ -885,32 +928,40 @@ class Orchestrator:
         csv_output_file = self.output_path / "combined_findings.csv"
         with open(csv_output_file, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
-            writer.writerow(["Severity", "File", "Line", "Category", "Title", "Source"])
+            writer.writerow(["Severity", "File", "Line", "Category", "Title", "Source", "Recommendation", "Impact", "Explanation"])
             for item in combined:
+                recommendation = item.get('recommendation') or item.get('fix') or item.get('explanation') or item.get('description') or ''
                 writer.writerow([
                     item.get("severity", ""),
                     item.get("file", ""),
                     item.get("line_number", item.get("line", "")),
                     item.get("category", ""),
                     item.get("title", item.get("rule_name", "")),
-                    item.get("source", "")
+                    item.get("source", ""),
+                    recommendation,
+                    item.get("impact", ""),
+                    item.get("explanation", "")
                 ])
-        self.console.print(f"[green]✓[/green] CSV export written to {csv_output_file}")
+        self.console.print(f"[green]✓[/green] CSV report: {csv_output_file}")
 
         md_output_file = self.output_path / "combined_findings.md"
         with open(md_output_file, "w", encoding="utf-8") as f:
-            f.write("| Severity | File | Line | Category | Title | Source |\n")
-            f.write("|----------|------|------|----------|-------|--------|\n")
+            f.write("| Severity | File | Line | Category | Title | Source | Recommendation |\n")
+            f.write("|----------|------|------|----------|-------|--------|----------------|\n")
             for item in combined:
+                recommendation = item.get('recommendation') or item.get('fix') or item.get('explanation') or item.get('description') or 'N/A'
+                # Truncate long recommendations for table
+                rec_display = recommendation[:100] + "..." if len(recommendation) > 100 else recommendation
                 f.write(
                     f"| {item.get('severity','')} "
-                    f"| {item.get('file','')} "
+                    f"| `{item.get('file','')}` "
                     f"| {item.get('line_number', item.get('line',''))} "
                     f"| {item.get('category','')} "
                     f"| {item.get('title', item.get('rule_name',''))} "
-                    f"| {item.get('source','')} |\n"
+                    f"| {item.get('source','')} "
+                    f"| {rec_display} |\n"
                 )
-        self.console.print(f"[green]✓[/green] Markdown export written to {md_output_file}")
+        self.console.print(f"[green]✓[/green] Markdown report: {md_output_file}")
 
         # Get top findings for payload generation and annotation
         top_findings = sorted(
