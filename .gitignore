@@ -10,12 +10,32 @@ scanner
 *output*
 *.gowasp.cache*
 
-# scrynet cache
+# scrynet cache and review state
 .scrynet_cache/
 *.scrynet.cache*
 
+# Test targets (large repos, don't commit)
 *WebGoat*
 *DVWA*
+test_targets/
+
+# Analysis outputs and reports (NEVER commit these - may contain sensitive data)
+output/
+test-reports/
+security-reports/
+*-reports/
+**/payloads/
+**/annotations/
+**/*_findings.json
+**/*_findings.csv
+**/*_findings.md
+**/*_findings.html
+**/combined_findings.*
+**/static_findings.json
+**/ai_findings.json
+**/threat_model_report.json
+output.log
+*.log
 
 # Output binaries
 /bin/
@@ -79,12 +99,22 @@ gen/
 *.pb.validate.go
 *.pb.gw.go
 
-# Local env/config
+# Local env/config (NEVER commit secrets!)
 .env
 .env.*
 .local
 *.local.yaml
 *.local.json
+*.key
+*.pem
+*secret*
+*password*
+*credentials*
+
+# API keys and secrets (check for accidental commits)
+**/CLAUDE_API_KEY*
+**/*api*key*
+**/*secret*
 
 # OS-specific
 Thumbs.db
