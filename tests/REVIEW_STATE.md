@@ -1,6 +1,8 @@
-# Review State and Cache (Beta)
+# Review State and Cache
 
-This guide explains how to preserve context across sessions, resume prior reviews, and manage the beta cache. It applies only to the beta analyzer (`gowasp/beta/smart__.py`).
+> **Note**: This documentation describes review state features. The implementation is in `lib/scrynet_context.py` and is used by `smart_analyzer.py` and `orchestrator.py`.
+
+This guide explains how to preserve context across sessions, resume prior reviews, and manage the cache system.
 
 ## What you get
 - Persistent review state with checkpoints (prioritization, deep dive, synthesis)
@@ -15,18 +17,22 @@ This guide explains how to preserve context across sessions, resume prior review
 1) Start a review with state tracking
 
 ```bash
-python3 smart__.py /path/to/repo "your question" --enable-review-state
+# Using smart_analyzer.py
+python3 smart_analyzer.py /path/to/repo "your question" --enable-review-state
+
+# Or using scrynet.py analyze mode
+python3 scrynet.py analyze /path/to/repo "your question" --enable-review-state
 ```
 
 2) Resume a prior review
 
 - By ID:
 ```bash
-python3 smart__.py /path/to/repo --resume-review <review_id>
+python3 smart_analyzer.py /path/to/repo --resume-review <review_id>
 ```
 - Auto-detect by directory (same repo structure):
 ```bash
-python3 smart__.py /path/to/repo "your question" --enable-review-state
+python3 smart_analyzer.py /path/to/repo "your question" --enable-review-state
 # If a matching review exists, you'll be prompted to resume
 ```
 
@@ -34,10 +40,10 @@ python3 smart__.py /path/to/repo "your question" --enable-review-state
 
 ```bash
 # List available reviews (most recent first)
-python3 smart__.py . --list-reviews
+python3 smart_analyzer.py . --list-reviews
 
 # Show status of a specific review
-python3 smart__.py . --review-status <review_id>
+python3 smart_analyzer.py . --review-status <review_id>
 ```
 
 4) Open the saved context in your editor
@@ -83,19 +89,19 @@ All commands exit after performing the requested action.
 
 ```bash
 # Show cache statistics
-python3 smart__.py . --cache-info
+python3 smart_analyzer.py . --cache-info
 
 # List recent cache entries
-python3 smart__.py . --cache-list
+python3 smart_analyzer.py . --cache-list
 
 # Prune entries older than N days
-python3 smart__.py . --cache-prune 14
+python3 smart_analyzer.py . --cache-prune 14
 
-# Clear all cache entries (beta cache only)
-python3 smart__.py . --cache-clear
+# Clear all cache entries
+python3 smart_analyzer.py . --cache-clear
 
 # Export a manifest (paths + content preview) to a JSON file
-python3 smart__.py . --cache-export cache_manifest.json
+python3 smart_analyzer.py . --cache-export cache_manifest.json
 ```
 
 ### Namespacing details
@@ -109,37 +115,37 @@ python3 smart__.py . --cache-export cache_manifest.json
 
 1) Populate cache & create a review
 ```bash
-python3 smart__.py /path/to/repo "security quick pass" --enable-review-state
+python3 smart_analyzer.py /path/to/repo "security quick pass" --enable-review-state
 ```
 Expect: analysis runs; Review ID printed; `.scrynet_cache/` created.
 
 2) Verify review exists
 ```bash
-python3 smart__.py . --list-reviews
-python3 smart__.py . --review-status <review_id>
+python3 smart_analyzer.py . --list-reviews
+python3 smart_analyzer.py . --review-status <review_id>
 ```
 
 3) Validate cache reuse
 ```bash
-python3 smart__.py /path/to/repo "security quick pass" --enable-review-state
+python3 smart_analyzer.py /path/to/repo "security quick pass" --enable-review-state
 ```
 Expect: "Cache hit" messages for stages on repeat runs.
 
 4) Inspect cache
 ```bash
-python3 smart__.py . --cache-info
-python3 smart__.py . --cache-list
+python3 smart_analyzer.py . --cache-info
+python3 smart_analyzer.py . --cache-list
 ```
 
 5) Prune/Clear
 ```bash
-python3 smart__.py . --cache-prune 7
-python3 smart__.py . --cache-clear
+python3 smart_analyzer.py . --cache-prune 7
+python3 smart_analyzer.py . --cache-clear
 ```
 
 6) Auto-detect resume
 ```bash
-python3 smart__.py /path/to/repo "security quick pass" --enable-review-state
+python3 smart_analyzer.py /path/to/repo "security quick pass" --enable-review-state
 # If a matching review exists, you'll be prompted to resume
 ```
 

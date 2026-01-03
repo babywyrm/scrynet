@@ -1,10 +1,12 @@
 # SCRYNET Context Library
 
+> **Location**: The implementation is in `lib/scrynet_context.py`, not a standalone package.
+
 A unified, type-safe Python library for managing review context, API caching, and cost tracking in the SCRYNET code analysis system.
 
 ## Overview
 
-The `scrynet_context` library provides a single, cohesive interface for:
+The `scrynet_context` module (in `lib/scrynet_context.py`) provides a single, cohesive interface for:
 
 - **Review State Management**: Create, resume, and track code review sessions
 - **API Response Caching**: Namespaced caching with automatic key generation
@@ -25,7 +27,7 @@ The `scrynet_context` library provides a single, cohesive interface for:
 ## Quick Start
 
 ```python
-from scrynet_context import ReviewContextManager
+from lib.scrynet_context import ReviewContextManager
 
 # Initialize
 ctx = ReviewContextManager(
@@ -344,7 +346,7 @@ All classes use:
 
 ## Integration
 
-The library is designed to be a drop-in replacement for the existing `ReviewStateManager` and `CacheManager` classes in `smart__.py`. Migration path:
+The library is designed to be a drop-in replacement for the existing `ReviewStateManager` and `CacheManager` classes in `smart_analyzer.py`. Migration path:
 
 1. Replace `ReviewStateManager` with `ReviewContextManager`
 2. Replace `CacheManager` with `ReviewContextManager` caching methods

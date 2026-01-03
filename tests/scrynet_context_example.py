@@ -9,8 +9,10 @@ This demonstrates how to use ReviewContextManager for:
 - Managing review state
 """
 
+import sys
 from pathlib import Path
-from scrynet_context import ReviewContextManager
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from lib.scrynet_context import ReviewContextManager
 
 # Initialize the context manager
 ctx = ReviewContextManager(

@@ -7,7 +7,10 @@ Tests core functionality without requiring API calls.
 import tempfile
 import shutil
 from pathlib import Path
-from scrynet_context import ReviewContextManager, ReviewState
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from lib.scrynet_context import ReviewContextManager, ReviewState
 
 def test_basic_functionality():
     """Test basic library functionality."""

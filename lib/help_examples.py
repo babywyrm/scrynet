@@ -24,12 +24,12 @@ def print_help_examples():
 
 ### Basic Security Scan
 ```bash
-python3 smart__.py /path/to/repo "find all security vulnerabilities"
+python3 smart_analyzer.py /path/to/repo "find all security vulnerabilities"
 ```
 
 ### Security Scan with Payloads
 ```bash
-python3 smart__.py /path/to/repo "find injection vulnerabilities" \\
+python3 smart_analyzer.py /path/to/repo "find injection vulnerabilities" \\
   --generate-payloads --top-n 5
 ```
 
@@ -37,7 +37,7 @@ python3 smart__.py /path/to/repo "find injection vulnerabilities" \\
 ```bash
 # CTF mode is optimized for Capture The Flag challenges
 # Focuses on exploitable vulnerabilities and quick wins
-python3 smart__.py /path/to/ctf-challenge "find all vulnerabilities and flags" \\
+python3 smart_analyzer.py /path/to/ctf-challenge "find all vulnerabilities and flags" \\
   --ctf-mode \\
   --top-n 10 \\
   --generate-payloads
@@ -50,7 +50,7 @@ python3 smart__.py /path/to/ctf-challenge "find all vulnerabilities and flags" \
 ### Starting a Review with State Tracking
 ```bash
 # Start a new review (saves state for resuming later)
-python3 smart__.py WebGoat/src/ "find security vulnerabilities" \\
+python3 smart_analyzer.py WebGoat/src/ "find security vulnerabilities" \\
   --enable-review-state
 ```
 
@@ -58,23 +58,23 @@ python3 smart__.py WebGoat/src/ "find security vulnerabilities" \\
 
 **Option 1: Auto-resume last matching review**
 ```bash
-python3 smart__.py WebGoat/src/ "find security vulnerabilities" \\
+python3 smart_analyzer.py WebGoat/src/ "find security vulnerabilities" \\
   --resume-last
 ```
 
 **Option 2: Resume by review ID**
 ```bash
 # First, list reviews to get the ID
-python3 smart__.py . --list-reviews
+python3 smart_analyzer.py . --list-reviews
 
 # Then resume
-python3 smart__.py WebGoat/src/ --resume-review abc123def456
+python3 smart_analyzer.py WebGoat/src/ --resume-review abc123def456
 ```
 
 **Option 3: Auto-detect and prompt**
 ```bash
 # If a matching review exists, you'll be prompted
-python3 smart__.py WebGoat/src/ "find security vulnerabilities" \\
+python3 smart_analyzer.py WebGoat/src/ "find security vulnerabilities" \\
   --enable-review-state
 ```
 
@@ -82,12 +82,12 @@ python3 smart__.py WebGoat/src/ "find security vulnerabilities" \\
 
 **List all reviews:**
 ```bash
-python3 smart__.py . --list-reviews
+python3 smart_analyzer.py . --list-reviews
 ```
 
 **Check status of a specific review:**
 ```bash
-python3 smart__.py . --review-status abc123def456
+python3 smart_analyzer.py . --review-status abc123def456
 ```
 
 **View context file (for Cursor/Claude):**
@@ -101,27 +101,27 @@ cat .scrynet_cache/reviews/_abc123def456_context.md
 
 ### View Cache Statistics
 ```bash
-python3 smart__.py . --cache-info
+python3 smart_analyzer.py . --cache-info
 ```
 
 ### List Recent Cache Entries
 ```bash
-python3 smart__.py . --cache-list
+python3 smart_analyzer.py . --cache-list
 ```
 
 ### Prune Old Cache (older than 14 days)
 ```bash
-python3 smart__.py . --cache-prune 14
+python3 smart_analyzer.py . --cache-prune 14
 ```
 
 ### Clear All Cache
 ```bash
-python3 smart__.py . --cache-clear
+python3 smart_analyzer.py . --cache-clear
 ```
 
 ### Export Cache Manifest
 ```bash
-python3 smart__.py . --cache-export cache_manifest.json
+python3 smart_analyzer.py . --cache-export cache_manifest.json
 ```
 
 ---
@@ -137,7 +137,7 @@ CTF mode is specifically optimized for finding exploitable vulnerabilities quick
 
 ### CTF Quick Scan
 ```bash
-python3 smart__.py /path/to/ctf-challenge \\
+python3 smart_analyzer.py /path/to/ctf-challenge \\
   "find all security vulnerabilities and flags" \\
   --ctf-mode \\
   --top-n 10 \\
@@ -147,7 +147,7 @@ python3 smart__.py /path/to/ctf-challenge \\
 
 ### CTF Focused on Entry Points
 ```bash
-python3 smart__.py /path/to/ctf-challenge \\
+python3 smart_analyzer.py /path/to/ctf-challenge \\
   "find the top entry points for exploitation" \\
   --ctf-mode \\
   --prioritize-top 5 \\
@@ -157,7 +157,7 @@ python3 smart__.py /path/to/ctf-challenge \\
 
 ### CTF with Full Exploitation Roadmap
 ```bash
-python3 smart__.py /path/to/ctf-challenge \\
+python3 smart_analyzer.py /path/to/ctf-challenge \\
   "find all exploitable vulnerabilities" \\
   --ctf-mode \\
   --top-n 15 \\
@@ -187,7 +187,7 @@ python3 smart__.py /path/to/ctf-challenge \\
 
 ### 1. Comprehensive Security Audit
 ```bash
-python3 smart__.py /path/to/app \\
+python3 smart_analyzer.py /path/to/app \\
   "find all security vulnerabilities and suggest remediations" \\
   --top-n 10 \\
   --generate-payloads \\
@@ -198,7 +198,7 @@ python3 smart__.py /path/to/app \\
 
 ### 2. Focused Injection Vulnerability Scan
 ```bash
-python3 smart__.py /path/to/app \\
+python3 smart_analyzer.py /path/to/app \\
   "find SQL injection and XSS vulnerabilities" \\
   --top-n 5 \\
   --generate-payloads \\
@@ -208,7 +208,7 @@ python3 smart__.py /path/to/app \\
 
 ### 3. Authentication & Authorization Review
 ```bash
-python3 smart__.py /path/to/app \\
+python3 smart_analyzer.py /path/to/app \\
   "review authentication and authorization mechanisms" \\
   --top-n 8 \\
   --generate-payloads \\
@@ -217,7 +217,7 @@ python3 smart__.py /path/to/app \\
 
 ### 4. Performance Analysis
 ```bash
-python3 smart__.py /path/to/app \\
+python3 smart_analyzer.py /path/to/app \\
   "identify performance bottlenecks" \\
   -v \\
   --format html markdown \\
@@ -226,7 +226,7 @@ python3 smart__.py /path/to/app \\
 
 ### 5. Code Quality Review
 ```bash
-python3 smart__.py /path/to/python/repo \\
+python3 smart_analyzer.py /path/to/python/repo \\
   "review code quality and suggest improvements" \\
   --optimize \\
   --focus typing security readability \\
@@ -240,7 +240,7 @@ python3 smart__.py /path/to/python/repo \\
 
 ### Custom Model Selection
 ```bash
-python3 smart__.py /path/to/repo "analyze code" \\
+python3 smart_analyzer.py /path/to/repo "analyze code" \\
   --model claude-3-5-sonnet-20241022 \\
   --max-tokens 8000 \\
   --temperature 0.0
@@ -249,18 +249,18 @@ python3 smart__.py /path/to/repo "analyze code" \\
 ### File Filtering
 ```bash
 # Only analyze specific file types
-python3 smart__.py /path/to/repo "find vulnerabilities" \\
+python3 smart_analyzer.py /path/to/repo "find vulnerabilities" \\
   --include-exts py go js java
 
 # Exclude specific directories
-python3 smart__.py /path/to/repo "find vulnerabilities" \\
+python3 smart_analyzer.py /path/to/repo "find vulnerabilities" \\
   --ignore-dirs tests node_modules vendor
 ```
 
 ### Including YAML/Helm Files
 ```bash
 # Analyze CI/CD workflows and Kubernetes configs
-python3 smart__.py /path/to/repo \\
+python3 smart_analyzer.py /path/to/repo \\
   "review GitHub Actions and K8s configs for security" \\
   --include-yaml \\
   --include-helm
@@ -268,7 +268,7 @@ python3 smart__.py /path/to/repo \\
 
 ### Verbose Debug Mode
 ```bash
-python3 smart__.py /path/to/repo "find vulnerabilities" \\
+python3 smart_analyzer.py /path/to/repo "find vulnerabilities" \\
   --debug \\
   -v \\
   --enable-review-state
@@ -282,7 +282,7 @@ python3 smart__.py /path/to/repo "find vulnerabilities" \\
 
 **Step 1: Initial Review**
 ```bash
-python3 smart__.py WebGoat/src/ \\
+python3 smart_analyzer.py WebGoat/src/ \\
   "comprehensive security audit" \\
   --enable-review-state \\
   --generate-payloads \\
@@ -297,21 +297,21 @@ python3 smart__.py WebGoat/src/ \\
 
 **Step 3: Resume if Interrupted**
 ```bash
-python3 smart__.py WebGoat/src/ \\
+python3 smart_analyzer.py WebGoat/src/ \\
   "comprehensive security audit" \\
   --resume-last
 ```
 
 **Step 4: Check Cache Usage**
 ```bash
-python3 smart__.py . --cache-info
+python3 smart_analyzer.py . --cache-info
 ```
 
 ### Iterative Analysis Workflow
 
 **First Pass: Quick Overview**
 ```bash
-python3 smart__.py /path/to/repo "security overview" \\
+python3 smart_analyzer.py /path/to/repo "security overview" \\
   --top-n 5 \\
   --enable-review-state \\
   --max-files 10
@@ -319,7 +319,7 @@ python3 smart__.py /path/to/repo "security overview" \\
 
 **Second Pass: Deep Dive on Critical Issues**
 ```bash
-python3 smart__.py /path/to/repo \\
+python3 smart_analyzer.py /path/to/repo \\
   "deep dive on CRITICAL and HIGH impact vulnerabilities" \\
   --resume-last \\
   --threshold HIGH \\
@@ -375,7 +375,7 @@ API Usage Summary
 
 ### Multiple Formats
 ```bash
-python3 smart__.py /path/to/repo "analyze" \\
+python3 smart_analyzer.py /path/to/repo "analyze" \\
   --format console html markdown json \\
   --output analysis_report
 ```
@@ -464,47 +464,47 @@ def print_quick_reference():
     
     table.add_row(
         "Basic security scan",
-        "python3 smart__.py <repo> \"find vulnerabilities\""
+        "python3 smart_analyzer.py <repo> \"find vulnerabilities\""
     )
     table.add_row(
         "CTF mode (quick wins)",
-        "python3 smart__.py <repo> \"find vulnerabilities\" --ctf-mode --generate-payloads"
+        "python3 smart_analyzer.py <repo> \"find vulnerabilities\" --ctf-mode --generate-payloads"
     )
     table.add_row(
         "Start review with state",
-        "python3 smart__.py <repo> \"question\" --enable-review-state"
+        "python3 smart_analyzer.py <repo> \"question\" --enable-review-state"
     )
     table.add_row(
         "Resume last review",
-        "python3 smart__.py <repo> \"question\" --resume-last"
+        "python3 smart_analyzer.py <repo> \"question\" --resume-last"
     )
     table.add_row(
         "Resume by ID",
-        "python3 smart__.py <repo> --resume-review <id>"
+        "python3 smart_analyzer.py <repo> --resume-review <id>"
     )
     table.add_row(
         "List reviews",
-        "python3 smart__.py . --list-reviews"
+        "python3 smart_analyzer.py . --list-reviews"
     )
     table.add_row(
         "Cache info",
-        "python3 smart__.py . --cache-info"
+        "python3 smart_analyzer.py . --cache-info"
     )
     table.add_row(
         "Clear cache",
-        "python3 smart__.py . --cache-clear"
+        "python3 smart_analyzer.py . --cache-clear"
     )
     table.add_row(
         "With payloads",
-        "python3 smart__.py <repo> \"question\" --generate-payloads --top-n 5"
+        "python3 smart_analyzer.py <repo> \"question\" --generate-payloads --top-n 5"
     )
     table.add_row(
         "Verbose + debug",
-        "python3 smart__.py <repo> \"question\" -v --debug"
+        "python3 smart_analyzer.py <repo> \"question\" -v --debug"
     )
     table.add_row(
         "Multiple formats",
-        "python3 smart__.py <repo> \"question\" --format html markdown --output report"
+        "python3 smart_analyzer.py <repo> \"question\" --format html markdown --output report"
     )
     
     console.print("\n")

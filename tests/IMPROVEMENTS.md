@@ -1,40 +1,36 @@
-# Beta Directory Improvement Plan
+# Historical Improvement Notes (Beta Development)
 
-## Critical Issues (High Priority)
+> **Note**: This file documents issues and improvements from the beta development phase. Many of these have been addressed in the unified repository structure.
 
-### 1. Import Path Issue
-**Problem**: `from prompts import PromptFactory` fails when script is run from outside the beta directory.
+## ✅ Resolved Issues
 
-**Solution**: 
-- Use relative import: `from .prompts import PromptFactory` (if making it a package)
-- Or add path resolution: `sys.path.insert(0, str(Path(__file__).parent))`
+### 1. Import Path Issue ✅ FIXED
+**Original Problem**: `from prompts import PromptFactory` failed when script was run from outside the beta directory.
 
-**Impact**: Scripts currently fail when run from different directories.
-
----
-
-### 2. Model Inconsistency
-**Problem**: README claims "Claude 3.5 Sonnet" but `smart__.py` uses `claude-3-5-haiku-20241022`.
-
-**Solution**: 
-- Update README to reflect actual model usage
-- Or change code to use Sonnet for consistency
-- Document why Haiku vs Sonnet choice
-
-**Impact**: User confusion and potential performance/quality differences.
+**Resolution**: 
+- Repository restructured with unified `lib/` directory
+- All imports now use `from lib.prompts import ...`
+- Path resolution added to entry points
 
 ---
 
-### 3. Missing Dependencies File
-**Problem**: No `requirements.txt` for easy setup.
+### 2. Model Inconsistency ✅ FIXED
+**Original Problem**: README claimed "Claude 3.5 Sonnet" but code used `claude-3-5-haiku-20241022`.
 
-**Solution**: Create `requirements.txt` with pinned versions:
-```
-anthropic>=0.18.0
-rich>=13.0.0
-```
+**Resolution**: 
+- Default model set to `claude-3-5-haiku-20241022` (cost-efficient)
+- `--model` argument added to override model
+- Documentation updated to reflect actual usage
 
-**Impact**: Harder for users to set up the environment.
+---
+
+### 3. Missing Dependencies File ✅ FIXED
+**Original Problem**: No `requirements.txt` for easy setup.
+
+**Resolution**: 
+- `requirements.txt` created in root directory
+- Includes: `anthropic`, `rich`, `typing-inspection`, `tqdm`
+- Setup scripts (`setup.sh`) added for automated installation
 
 ---
 

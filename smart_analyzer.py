@@ -649,15 +649,15 @@ def create_parser() -> argparse.ArgumentParser:
         epilog="""
 Examples:
   # Regular security analysis
-  python3 smart__.py /path/to/repo "find security vulnerabilities"
+  python3 smart_analyzer.py /path/to/repo "find security vulnerabilities"
   
   # CTF mode (optimized for quick vulnerability discovery)
-  python3 smart__.py /path/to/ctf-challenge "find vulnerabilities" --ctf-mode --generate-payloads
+  python3 smart_analyzer.py /path/to/ctf-challenge "find vulnerabilities" --ctf-mode --generate-payloads
   
   # With review state management
-  python3 smart__.py /path/to/repo "find vulnerabilities" --enable-review-state --resume-last
+  python3 smart_analyzer.py /path/to/repo "find vulnerabilities" --enable-review-state --resume-last
   
-For more examples, run: python3 smart__.py --help-examples
+For more examples, run: python3 smart_analyzer.py --help-examples
         """
     )
     p.add_argument("repo_path", help="Path to the repository to analyze")

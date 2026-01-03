@@ -6,7 +6,7 @@ A unified library for managing review context, API caching, and cost tracking.
 Provides a clean, type-safe interface for persistent review sessions.
 
 Usage:
-    from scrynet_context import ReviewContextManager
+    from lib.scrynet_context import ReviewContextManager
     
     ctx = ReviewContextManager(cache_dir=".scrynet_cache")
     review = ctx.create_or_resume_review(repo_path, question)
@@ -767,7 +767,7 @@ class ReviewContextManager:
             "",
             "To resume this review:",
             f"```bash",
-            f"python3 smart__.py {state.repo_path} \"{state.question}\" --resume-review {state.review_id}",
+            f"python3 smart_analyzer.py {state.repo_path} \"{state.question}\" --resume-review {state.review_id}",
             "```",
             "",
         ])
