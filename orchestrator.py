@@ -1011,6 +1011,12 @@ class Orchestrator:
                 )
         self.console.print(f"[green]✓[/green] Markdown report: {md_output_file}")
 
+        # Generate HTML report if requested
+        if self.export_formats and 'html' in self.export_formats:
+            html_output_file = self.output_path / "combined_findings.html"
+            self._generate_html_report(combined, html_output_file)
+            self.console.print(f"[green]✓[/green] HTML report: {html_output_file}")
+
         # Get top findings for payload generation and annotation
         top_findings = sorted(
             combined,
@@ -1063,7 +1069,13 @@ class Orchestrator:
         summary_table.add_row("", "")  # Spacer
         summary_table.add_row("[bold]By Source:[/bold]", "")
         for source, count in sorted(profile_counts.items()):
-            source_display = source.replace('claude-', '').replace('scrynet', 'Static Scanner')
+            # Format source display nicely
+            if ',' in source:
+                # Multiple profiles - format as "profile1 + profile2"
+                profiles = [p.strip().replace('claude-', '') for p in source.split(',')]
+                source_display = ' + '.join(profiles)
+            else:
+                source_display = source.replace('claude-', '').replace('scrynet', 'Static Scanner')
             summary_table.add_row(f"  • {source_display}:", str(count))
         
         # Breakdown by severity
