@@ -29,6 +29,7 @@ from lib.prompts import PromptFactory
 from lib.deduplication import deduplicate_findings
 from lib.cost_tracker import CostTracker
 from lib.cost_estimator import estimate_scan_cost
+from lib.profile_metadata import list_profiles_by_category, get_all_profiles
 
 # --- Constants / Configuration ---
 CLAUDE_MODEL = "claude-3-5-haiku-20241022"  # Using Haiku for cost efficiency; can be overridden via --model flag
@@ -1218,8 +1219,51 @@ class Orchestrator:
             # Export cost data
             cost_output_file = self.output_path / "cost_tracking.json"
             self.cost_tracker.export_to_json(cost_output_file)
-            self.console.print(f"[dim]💾 Cost tracking data saved to: {cost_output_file}[/dim]")
-            self.console.print(f"[dim]⚠️  Note: Actual costs may be slightly higher (failed calls, retries, or accumulated costs)[/dim]")
+            self.console.print(f"[dim]Cost tracking data saved to: {cost_output_file}[/dim]")
+            self.console.print(f"[dim]Note: Actual costs may be slightly higher (failed calls, retries, or accumulated costs)[/dim]")
+
+
+def _print_profile_list(console: Console) -> None:
+    """Print a formatted list of all available profiles."""
+    console.print("\n[bold]Available AI Profiles[/bold]")
+    console.print("=" * 70)
+    
+    profiles_by_category = list_profiles_by_category()
+    
+    for category_name in ["security", "compliance", "code_quality"]:
+        if category_name not in profiles_by_category:
+            continue
+            
+        category_title = category_name.replace("_", " ").title()
+        console.print(f"\n[bold cyan]{category_title}[/bold cyan]")
+        console.print("-" * 70)
+        
+        for profile in profiles_by_category[category_name]:
+            default_marker = " (default)" if profile.default else ""
+            console.print(f"\n[bold]{profile.display_name}[/bold]{default_marker}")
+            console.print(f"  Name: [dim]{profile.name}[/dim]")
+            console.print(f"  {profile.description}")
+            
+            console.print(f"\n  [bold]Use Cases:[/bold]")
+            for use_case in profile.use_cases:
+                console.print(f"    • {use_case}")
+            
+            console.print(f"\n  [bold]Focus Areas:[/bold]")
+            for focus in profile.focus_areas[:5]:  # Show first 5
+                console.print(f"    • {focus}")
+            if len(profile.focus_areas) > 5:
+                console.print(f"    ... and {len(profile.focus_areas) - 5} more")
+            
+            console.print(f"\n  [bold]Examples:[/bold]")
+            for example in profile.examples:
+                console.print(f"    [dim]$[/dim] python3 scrynet.py hybrid ./repo ./scanner {example}")
+            console.print()
+    
+    console.print("\n[bold]Usage Tips:[/bold]")
+    console.print("  • Combine multiple profiles: --profile owasp,ctf,code_review")
+    console.print("  • Use --prioritize with multiple profiles to save time and cost")
+    console.print("  • Default profile is 'owasp' if none specified")
+    console.print()
 
 
 def main() -> None:
@@ -1274,9 +1318,16 @@ def main() -> None:
                         help="Deduplication strategy: keep_highest_severity (default), keep_first, or merge")
     parser.add_argument("--estimate-cost", action="store_true",
                         help="Estimate API costs before running (does not execute scan)")
+    parser.add_argument("--list-profiles", action="store_true",
+                        help="List all available AI profiles with descriptions and use cases")
     args = parser.parse_args()
 
     console = Console()
+    
+    # Handle profile listing early
+    if args.list_profiles:
+        _print_profile_list(console)
+        sys.exit(0)
     if not args.repo_path.is_dir():
         console.print(f"[red]Error: '{args.repo_path}' is not a directory[/red]")
         sys.exit(1)

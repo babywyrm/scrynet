@@ -269,6 +269,8 @@ def main():
                               help='Deduplication strategy: keep_highest_severity (default), keep_first, or merge')
     hybrid_parser.add_argument('--estimate-cost', action='store_true',
                               help='Estimate API costs before running (does not execute scan)')
+    hybrid_parser.add_argument('--list-profiles', action='store_true',
+                              help='List all available AI profiles with descriptions and use cases')
     
     args = parser.parse_args()
     
