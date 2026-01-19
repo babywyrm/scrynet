@@ -51,11 +51,18 @@ else
       --output-dir test-reports/juice-shop-test \
       --verbose
 
+    # Determine actual output path (output_dir + sanitized repo name)
+    ACTUAL_OUTPUT_DIR="test-reports/juice-shop-test/test_targets_juice-shop"
+    
     echo ""
     echo "✅ Test complete!"
     echo ""
     echo "Check results:"
-    echo "  ls -lh test-reports/juice-shop-test/"
-    echo "  cat test-reports/juice-shop-test/cost_tracking.json | jq '.summary'"
-    echo "  cat test-reports/juice-shop-test/combined_findings.json | jq 'length'"
+    echo "  ls -lh ${ACTUAL_OUTPUT_DIR}/"
+    echo "  cat ${ACTUAL_OUTPUT_DIR}/cost_tracking.json | jq '.summary'"
+    echo "  cat ${ACTUAL_OUTPUT_DIR}/combined_findings.json | jq 'length'"
+    echo ""
+    echo "📊 View cost breakdown:"
+    echo "  cat ${ACTUAL_OUTPUT_DIR}/cost_tracking.json | jq '.summary.total_estimated_cost'"
+    echo "  cat ${ACTUAL_OUTPUT_DIR}/cost_tracking.json | jq '.summary.by_stage'"
 fi
