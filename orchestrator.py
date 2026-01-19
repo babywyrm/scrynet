@@ -248,7 +248,7 @@ class Orchestrator:
                         max_tokens=3000,
                         messages=[{"role": "user", "content": prompt}]
                     )
-                    # Track cost for this API call
+                    # Track cost for this API call (including retries - each attempt costs)
                     self.cost_tracker.record_from_response(
                         response=resp,
                         stage="analysis",
@@ -260,9 +260,21 @@ class Orchestrator:
                     if parsed:
                         return parsed
                 except anthropic.APIStatusError as e:
+                    # Track failed attempts too (if they consume tokens before failing)
+                    # Note: Some errors may still charge for tokens used
                     if e.status_code == 529 and attempt < MAX_RETRIES - 1:
                         wait_time = 2 ** (attempt + 1)
-                        logger.warning(f"Claude API overloaded for {file_path}. Retrying in {wait_time}s...")
+                        logger.warning(f"Claude API overloaded for {file_path}. Retrying in {wait_time}s... (attempt {attempt + 1}/{MAX_RETRIES})")
+                        # Estimate tokens for failed call (prompt was sent)
+                        estimated_input = len(prompt.split()) * 1.3  # Rough estimate
+                        self.cost_tracker.record_call(
+                            stage="analysis",
+                            model=self.model,
+                            input_tokens=int(estimated_input),
+                            output_tokens=0,
+                            profile=profile,
+                            file=str(file_path)
+                        )
                         time.sleep(wait_time)
                     else:
                         raise e
@@ -1207,6 +1219,7 @@ class Orchestrator:
             cost_output_file = self.output_path / "cost_tracking.json"
             self.cost_tracker.export_to_json(cost_output_file)
             self.console.print(f"[dim]💾 Cost tracking data saved to: {cost_output_file}[/dim]")
+            self.console.print(f"[dim]⚠️  Note: Actual costs may be slightly higher (failed calls, retries, or accumulated costs)[/dim]")
 
 
 def main() -> None:

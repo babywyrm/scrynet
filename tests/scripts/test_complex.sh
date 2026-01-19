@@ -27,13 +27,13 @@ if [[ -z "$CLAUDE_API_KEY" ]]; then
 fi
 
 # Test with SQL injection vulnerability directory (good test case)
-TARGET="./test_targets/DVWA/vulnerabilities/sqli"
-SCANNER="./scanner"
+TARGET="../test_targets/DVWA/vulnerabilities/sqli"
+SCANNER="../../scanner"
 
 if [ ! -d "$TARGET" ]; then
     echo "⚠️  Test target not found: $TARGET"
-    echo "Trying alternative: ./test_targets/DVWA/vulnerabilities"
-    TARGET="./test_targets/DVWA/vulnerabilities"
+    echo "Trying alternative: ../test_targets/DVWA/vulnerabilities"
+    TARGET="../test_targets/DVWA/vulnerabilities"
 fi
 
 echo -e "${YELLOW}Test Configuration:${NC}"
@@ -48,7 +48,7 @@ echo ""
 echo -e "${BLUE}Running complex test...${NC}"
 echo ""
 
-python3 scrynet.py hybrid "$TARGET" "$SCANNER" \
+python3 ../../scrynet.py hybrid "$TARGET" "$SCANNER" \
     --profile owasp,ctf \
     --prioritize \
     --prioritize-top 6 \
@@ -60,13 +60,13 @@ python3 scrynet.py hybrid "$TARGET" "$SCANNER" \
     --annotate-code \
     --top-n 6 \
     --export-format json html markdown csv \
-    --output-dir ./test-reports/complex-test \
+    --output-dir ../test-reports/complex-test \
     --verbose
 
 echo ""
 echo -e "${GREEN}✅ Test complete!${NC}"
 echo ""
 echo "Check results:"
-echo "  ls -lh test-reports/complex-test/"
-echo "  cat test-reports/complex-test/combined_findings.json | jq 'length'"
-echo "  cat test-reports/complex-test/combined_findings.json | jq '.[] | select(.profiles != null)'"
+echo "  ls -lh ../test-reports/complex-test/"
+echo "  cat ../test-reports/complex-test/combined_findings.json | jq 'length'"
+echo "  cat ../test-reports/complex-test/combined_findings.json | jq '.[] | select(.profiles != null)'"

@@ -3,6 +3,10 @@
 Cost tracking utility for Anthropic API usage.
 
 Tracks token usage and calculates estimated costs based on model pricing.
+
+NOTE: Cost tracking only captures successful API calls. Failed calls that 
+charge for input tokens (e.g., rate limit errors after request processing)
+may not be fully tracked. Actual costs may be slightly higher than reported.
 """
 
 from typing import Dict, List, Optional, Any

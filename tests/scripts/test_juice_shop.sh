@@ -5,7 +5,7 @@ echo "🧪 Testing SCRYNET with Juice-Shop"
 echo "=================================="
 echo ""
 echo "Test Configuration:"
-echo "  Target: ./test_targets/juice-shop"
+echo "  Target: ../test_targets/juice-shop"
 echo "  Profiles: owasp,ctf"
 echo "  Deduplication: ENABLED"
 echo "  Payloads: ENABLED"
@@ -18,7 +18,7 @@ echo ""
 if [ "$1" == "--estimate-only" ]; then
     echo "💰 Running cost estimation only (no API calls)..."
     echo ""
-    python3 scrynet.py hybrid ./test_targets/juice-shop ./scanner \
+    python3 ../../scrynet.py hybrid ../test_targets/juice-shop ../../scanner \
       --profile owasp,ctf \
       --prioritize \
       --prioritize-top 10 \
@@ -30,13 +30,13 @@ if [ "$1" == "--estimate-only" ]; then
       --annotate-code \
       --top-n 5 \
       --export-format json csv markdown html \
-      --output-dir test-reports/juice-shop-test \
+      --output-dir ../test-reports/juice-shop-test \
       --verbose \
       --estimate-cost
 else
     echo "🚀 Running full scan with cost tracking..."
     echo ""
-    python3 scrynet.py hybrid ./test_targets/juice-shop ./scanner \
+    python3 ../../scrynet.py hybrid ../test_targets/juice-shop ../../scanner \
       --profile owasp,ctf \
       --prioritize \
       --prioritize-top 10 \
@@ -48,11 +48,11 @@ else
       --annotate-code \
       --top-n 5 \
       --export-format json csv markdown html \
-      --output-dir test-reports/juice-shop-test \
+      --output-dir ../test-reports/juice-shop-test \
       --verbose
 
     # Determine actual output path (output_dir + sanitized repo name)
-    ACTUAL_OUTPUT_DIR="test-reports/juice-shop-test/test_targets_juice-shop"
+    ACTUAL_OUTPUT_DIR="../test-reports/juice-shop-test/test_targets_juice-shop"
     
     echo ""
     echo "✅ Test complete!"

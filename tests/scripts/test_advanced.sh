@@ -26,11 +26,11 @@ if [[ -z "$CLAUDE_API_KEY" ]]; then
     exit 1
 fi
 
-TARGET="./test_targets/DVWA"
-SCANNER="./scanner"
+TARGET="../test_targets/DVWA"
+SCANNER="../../scanner"
 
 echo -e "${YELLOW}Test 1: Multi-Profile with Deduplication (OWASP + CTF)${NC}"
-python3 scrynet.py hybrid "$TARGET" "$SCANNER" \
+python3 ../../scrynet.py hybrid "$TARGET" "$SCANNER" \
     --profile owasp,ctf \
     --prioritize \
     --prioritize-top 10 \
@@ -42,14 +42,14 @@ python3 scrynet.py hybrid "$TARGET" "$SCANNER" \
     --annotate-code \
     --top-n 5 \
     --export-format json html \
-    --output-dir "./test-reports/advanced-1" \
+    --output-dir "../test-reports/advanced-1" \
     --verbose
 
 echo -e "${GREEN}✓ Test 1 complete${NC}"
 echo ""
 
 echo -e "${YELLOW}Test 2: Compliance Suite (SOC2 + PCI + Compliance)${NC}"
-python3 scrynet.py hybrid "$TARGET" "$SCANNER" \
+python3 ../../scrynet.py hybrid "$TARGET" "$SCANNER" \
     --profile soc2,pci,compliance \
     --prioritize \
     --prioritize-top 10 \
@@ -67,7 +67,7 @@ echo -e "${GREEN}✓ Test 2 complete${NC}"
 echo ""
 
 echo -e "${YELLOW}Test 3: All Profiles with Aggressive Deduplication${NC}"
-python3 scrynet.py hybrid "$TARGET" "$SCANNER" \
+python3 ../../scrynet.py hybrid "$TARGET" "$SCANNER" \
     --profile owasp,ctf,code_review \
     --prioritize \
     --prioritize-top 8 \
@@ -88,5 +88,5 @@ echo ""
 echo -e "${BLUE}✅ All advanced tests complete!${NC}"
 echo ""
 echo "Check results:"
-echo "  ls -lh test-reports/advanced-*/combined_findings.*"
-echo "  cat test-reports/advanced-*/combined_findings.json | jq '.[] | select(.profiles != null)'"
+echo "  ls -lh ../test-reports/advanced-*/combined_findings.*"
+echo "  cat ../test-reports/advanced-*/combined_findings.json | jq '.[] | select(.profiles != null)'"

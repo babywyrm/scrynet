@@ -27,8 +27,8 @@ if [[ -z "$CLAUDE_API_KEY" ]]; then
 fi
 
 # Test targets
-TARGET="./test_targets/DVWA"
-SCANNER="./scanner"
+TARGET="../test_targets/DVWA"
+SCANNER="../../scanner"
 
 # Profiles to test
 PROFILES=("ctf" "code_review" "modern" "soc2" "pci" "compliance")
@@ -36,7 +36,7 @@ PROFILES=("ctf" "code_review" "modern" "soc2" "pci" "compliance")
 for profile in "${PROFILES[@]}"; do
     echo -e "${GREEN}Testing $profile profile...${NC}"
     
-    python3 scrynet.py hybrid "$TARGET" "$SCANNER" \
+    python3 ../../scrynet.py hybrid "$TARGET" "$SCANNER" \
         --profile "$profile" \
         --prioritize \
         --prioritize-top 5 \
@@ -45,7 +45,7 @@ for profile in "${PROFILES[@]}"; do
         --annotate-code \
         --top-n 5 \
         --export-format json html markdown \
-        --output-dir "./test-reports/${profile}-test" \
+        --output-dir "../test-reports/${profile}-test" \
         --verbose
     
     echo -e "${GREEN}✓ $profile test complete${NC}"
@@ -53,6 +53,6 @@ for profile in "${PROFILES[@]}"; do
 done
 
 echo -e "${BLUE}✅ All profile tests complete!${NC}"
-echo "Check test-reports/ directory for results"
+echo "Check ../test-reports/ directory for results"
 
 
