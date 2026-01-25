@@ -1232,6 +1232,7 @@ Has Tests: {'Yes' if tech_info['has_tests'] else 'No'}
             self.console.print(f"[green]✓[/green] HTML report: {html_output_file}")
 
         # Get top findings for payload generation and annotation
+        # Strategy: Group by file so we don't miss findings in important files
         # Use smart top-n if not explicitly set (default is 5)
         effective_top_n = self.top_n
         if self.top_n == 5 and len(combined) > 10:  # Default wasn't changed
@@ -1239,7 +1240,8 @@ Has Tests: {'Yes' if tech_info['has_tests'] else 'No'}
             if self.verbose:
                 self.console.print(f"[dim]💡 Smart default: Analyzing top {effective_top_n} findings (found {len(combined)} total)[/dim]")
         
-        top_findings = sorted(
+        # First, get the top N findings by severity
+        top_n_globally = sorted(
             combined,
             key=lambda x: (
                 Severity[x.get("severity", "LOW").upper()].value
@@ -1247,6 +1249,18 @@ Has Tests: {'Yes' if tech_info['has_tests'] else 'No'}
             ),
             reverse=True
         )[:effective_top_n]
+        
+        # Extract unique files from those top findings
+        top_files = {f.get('file') for f in top_n_globally if f.get('file')}
+        
+        # Now get ALL findings from those top files (not just the top N)
+        top_findings = [f for f in combined if f.get('file') in top_files]
+        
+        if self.verbose and len(top_findings) != len(top_n_globally):
+            self.console.print(
+                f"[dim]💡 Analyzing {len(top_files)} files with {len(top_findings)} total findings "
+                f"(expanded from top {effective_top_n} to include all findings in those files)[/dim]"
+            )
         
         # Run payload generation if requested
         if self.generate_payloads:
