@@ -332,7 +332,7 @@ class Orchestrator:
                         return parsed
                 except anthropic.APIStatusError as e:
                     # Track failed attempts too (if they consume tokens before failing)
-                    # Note: Some errors may still charge for tokens used
+                    # API errors may charge for input tokens before failing
                     if e.status_code == 529 and attempt < MAX_RETRIES - 1:
                         wait_time = 2 ** (attempt + 1)
                         logger.warning(f"Claude API overloaded for {file_path}. Retrying in {wait_time}s... (attempt {attempt + 1}/{MAX_RETRIES})")
@@ -363,7 +363,7 @@ class Orchestrator:
         findings_key = next((key for key in result if key.endswith("_findings")), None)
         findings = result.get(findings_key, [])
         
-        # Color code risk level (FIXED: Critical and High are red, Medium is yellow)
+        # Color code risk level by severity
         risk_color = {
             "CRITICAL": "bold red",
             "HIGH": "red",
@@ -380,11 +380,11 @@ class Orchestrator:
                 title = f.get('title', 'Unknown Issue')
                 line = f.get('line_number', '?')
                 
-                # Enhanced: Show exploitability score if available
+                # Display exploitability score if available
                 exploit_score = f.get('exploitability_score', '')
                 exploit_str = f" [dim]⚡{exploit_score}/10[/dim]" if exploit_score else ""
                 
-                # Fixed color coding
+                # Color code by severity
                 sev_color = {
                     "CRITICAL": "bold red",
                     "HIGH": "red",
@@ -542,7 +542,7 @@ class Orchestrator:
                 processed: List[Finding] = []
                 for item in original_findings:
                     if self._meets_severity_threshold(item.get("severity", "")):
-                        # Use normalization utility
+                        # Normalize finding fields for consistency
                         normalized = normalize_finding(item, file_path=fpath, source=f'claude-{profile}')
                         processed.append(normalized)
                 return processed
@@ -932,7 +932,6 @@ class Orchestrator:
                         self.file_path = str(d.get('file', ''))
                         self.line_number = get_line_number(d)
                         self.finding = d.get('title', d.get('rule_name', 'Unknown'))
-                        # Use normalization utility
                         self.recommendation = get_recommendation_text(d)
                 
                 finding_obj = FindingObj(finding)
@@ -972,12 +971,11 @@ class Orchestrator:
                     if parsed and "annotated_snippet" in parsed:
                         snippet = parsed["annotated_snippet"]
                         
-                        # Extract file and line info using utilities
+                        # Extract file and line info
                         file_path = finding.get('file', 'Unknown')
                         line_num = get_line_number(finding)
                         finding_title = finding.get('title', finding.get('rule_name', 'Unknown'))
                         severity = finding.get('severity', 'UNKNOWN')
-                        # Use normalization utility for recommendation
                         recommendation = get_recommendation_text(finding)
                         
                         # Detect language from file extension
@@ -1252,7 +1250,7 @@ class Orchestrator:
             writer = csv.writer(f)
             writer.writerow(["Severity", "File", "Line", "Category", "Title", "Source", "Recommendation", "Impact", "Explanation"])
             for item in combined:
-                # Use normalization utilities
+                # Extract fields for CSV export
                 recommendation = get_recommendation_text(item)
                 line_num = get_line_number(item)
                 
@@ -1381,13 +1379,13 @@ class Orchestrator:
                 source_display = source.replace('claude-', '').replace('scrynet', 'Static Scanner')
             summary_table.add_row(f"  • {source_display}:", str(count))
         
-        # Breakdown by severity (FIXED: proper color coding)
+        # Breakdown by severity
         summary_table.add_row("", "")  # Spacer
         summary_table.add_row("[bold]By Severity:[/bold]", "")
         for sev in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
             if sev in severity_counts:
                 count = severity_counts[sev]
-                # FIXED: Critical/High = red, Medium = yellow, Low = cyan
+                # Color code by severity level
                 color = {"CRITICAL": "bold red", "HIGH": "red", "MEDIUM": "yellow", "LOW": "cyan"}.get(sev, "white")
                 summary_table.add_row(f"  • {sev}:", f"[{color}]{count}[/{color}]")
         
