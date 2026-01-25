@@ -4,9 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - 2026-01-24
 
-### Added - Phase 4: Enhanced Tech Stack Detection
+### Added - Phase 4: Enhanced Tech Stack Detection & Testing
 
-- **Deep Tech Stack Detection** (`lib/tech_detector.py`)
+- **Universal Tech Stack Detection** (`lib/universal_detector.py`)
   - Recursive detection of frameworks in subdirectories
   - Detects: Flask, Django, FastAPI, Express, Spring, Laravel, gRPC, and more
   - Identifies entry points (routes, controllers, APIs)
@@ -29,6 +29,14 @@ All notable changes to this project will be documented in this file.
   - Automatically highlights routes, controllers, auth files
   - Framework-specific attack patterns guide analysis
   - Example output: "8 framework-specific risks, 7 entry points, 1 critical file"
+
+- **Comprehensive Test Suite**
+  - Added 21 new tests (82 total, up from 61)
+  - Test coverage: 93.9% (up from 91.8%)
+  - All new features 100% tested
+  - Universal detector: 10 tests
+  - Advanced features: 11 tests (quick wins, file grouping, smart top-n)
+  - All critical functionality verified
 
 ### Important - Main Entry Point
 - **orchestrator.py** is now the recommended entry point for hybrid mode

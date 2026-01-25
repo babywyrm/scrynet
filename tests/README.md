@@ -32,16 +32,19 @@ python3 -m unittest tests.test_integration.TestNormalizationIntegration -v
 
 ## Test Files
 
-- `test_common.py` - Tests for `lib/common.py` utilities
-- `test_orchestrator.py` - Tests for orchestrator functionality
-- `test_profiles.py` - Tests for profile loading
-- `test_integration.py` - Integration and workflow tests
+- `test_common.py` - Tests for `lib/common.py` utilities (33 tests)
+- `test_orchestrator.py` - Tests for orchestrator functionality (5 tests)
+- `test_profiles.py` - Tests for profile loading (9 tests)
+- `test_integration.py` - Integration and workflow tests (5 tests)
+- `test_presets.py` - Preset system and smart defaults (13 tests)
+- `test_universal_detector.py` - Universal tech detection (10 tests) ⭐ NEW
+- `test_advanced_features.py` - Quick wins, file grouping, etc. (11 tests) ⭐ NEW
 - `test_imports.py` - Quick import verification
 - `test_context_lib.py` - Context/caching tests
 
 ## Test Coverage
 
-Current coverage: **43/48 tests passing (89.6%)**
+Current coverage: **77/82 tests passing (93.9%)**
 
 ### Covered
 ✅ Finding normalization (8 tests)
@@ -53,6 +56,14 @@ Current coverage: **43/48 tests passing (89.6%)**
 ✅ Integration workflows (5 tests)
 ✅ Orchestrator functionality (5 tests)
 ✅ Profile loading (9 tests)
+✅ Preset system (6 tests)
+✅ Smart defaults (5 tests)
+✅ Universal tech detection (10 tests) ⭐ NEW
+✅ Quick wins logic (4 tests) ⭐ NEW
+✅ File grouping (2 tests) ⭐ NEW
+✅ Framework-aware prioritization (2 tests) ⭐ NEW
+✅ Color coding (1 test) ⭐ NEW
+✅ Smart top-n (2 tests) ⭐ NEW
 
 ### Test Targets
 

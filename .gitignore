@@ -35,6 +35,8 @@ security-reports/
 **/static_findings.json
 **/ai_findings.json
 **/threat_model_report.json
+**/tech_stack.json
+**/cost_tracking.json
 output.log
 *.log
 
