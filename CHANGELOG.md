@@ -15,11 +15,13 @@ All notable changes to this project will be documented in this file.
   - Lists framework-specific security risks
   - `--detect-tech-stack` flag for detailed detection report
 
-- **Framework-Aware Analysis**
+- **Framework-Aware Analysis** (Automatic in Every Scan)
   - Tech stack context automatically passed to AI prompts
   - Framework-specific risks highlighted in prompts
   - Entry points and critical files emphasized
   - Prioritization questions enhanced with framework context
+  - Tech stack summary displayed in final report
+  - tech_stack.json exported with every scan
   - Example: Flask apps → Focuses on SSTI, SQLAlchemy injection, session security
 
 - **Smart File Focus**

@@ -1047,6 +1047,45 @@ class Orchestrator:
                 progress.advance(task)
                 time.sleep(0.5)  # Small delay
 
+    def _display_tech_stack_summary(self) -> None:
+        """Display tech stack detection summary in final report."""
+        tech = self.enhanced_tech_info
+        
+        if not tech.get('frameworks'):
+            return  # Skip if nothing detected
+        
+        self.console.print(f"\n[bold cyan]🔍 Tech Stack Analysis[/bold cyan]")
+        
+        # Sort frameworks by confidence
+        frameworks_sorted = sorted(
+            tech['frameworks'].items(),
+            key=lambda x: x[1],
+            reverse=True
+        )
+        
+        fw_display = ", ".join([f"{name} ({score:.0%})" for name, score in frameworks_sorted[:5]])
+        self.console.print(f"  Frameworks: {fw_display}")
+        
+        if tech.get('languages'):
+            self.console.print(f"  Languages: {', '.join(tech['languages'])}")
+        
+        if tech.get('databases'):
+            self.console.print(f"  Databases: {', '.join(tech['databases'])}")
+        
+        self.console.print(f"  App Type: {tech['app_type']}")
+        
+        if tech.get('entry_points'):
+            self.console.print(f"  Entry Points: {len(tech['entry_points'])} detected")
+        
+        if tech.get('security_critical_files'):
+            self.console.print(f"  Security Files: {len(tech['security_critical_files'])} detected")
+        
+        if tech.get('framework_specific_risks'):
+            top_risks = tech['framework_specific_risks'][:3]
+            self.console.print(f"  Top Risks: {', '.join(top_risks)}")
+        
+        self.console.print(f"  [dim]Full details: {self.output_path / 'tech_stack.json'}[/dim]")
+    
     def _display_quick_wins(self, findings: List[Dict[str, Any]]) -> None:
         """Display quick win summary highlighting most exploitable findings."""
         # Filter for high exploitability findings
@@ -1132,6 +1171,15 @@ class Orchestrator:
 
     def run(self) -> None:
         """Execute static scan, AI analysis, merge, and export findings."""
+        # Save tech stack detection results
+        tech_stack_file = self.output_path / "tech_stack.json"
+        with open(tech_stack_file, "w", encoding="utf-8") as f:
+            # Convert sets to lists for JSON serialization
+            tech_data = {k: list(v) if isinstance(v, set) else v for k, v in self.enhanced_tech_info.items()}
+            json.dump(tech_data, f, indent=2)
+        if self.verbose:
+            self.console.print(f"[dim]Tech stack detection saved to {tech_stack_file}[/dim]")
+        
         static_findings = self.run_static_scanner()
         for finding in static_findings:
             finding['source'] = 'scrynet'
@@ -1292,6 +1340,9 @@ class Orchestrator:
         
         # Final summary
         self.console.print("\n[bold green]✨ Analysis Complete![/bold green]")
+        
+        # Display tech stack summary
+        self._display_tech_stack_summary()
         
         # Calculate breakdowns
         severity_counts = {}
