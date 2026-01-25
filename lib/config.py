@@ -28,6 +28,7 @@ class ScanPreset:
     export_formats: List[str]
     threat_model: bool = False
     parallel: bool = False
+    show_quick_wins: bool = False  # Display quick win summary
     
     def to_dict(self) -> dict:
         """Convert preset to dictionary for merging with args."""
@@ -43,7 +44,8 @@ class ScanPreset:
             'top_n': self.top_n,
             'export_format': self.export_formats,
             'threat_model': self.threat_model,
-            'parallel': self.parallel
+            'parallel': self.parallel,
+            'show_quick_wins': self.show_quick_wins
         }
 
 
@@ -80,7 +82,8 @@ PRESETS: Dict[str, ScanPreset] = {
         dedupe_threshold=0.7,
         dedupe_strategy='keep_highest_severity',
         top_n=5,
-        export_formats=['json', 'html', 'markdown']
+        export_formats=['json', 'html', 'markdown'],
+        show_quick_wins=True  # CTF mode shows quick wins
     ),
     
     'ctf-fast': ScanPreset(
@@ -95,7 +98,8 @@ PRESETS: Dict[str, ScanPreset] = {
         dedupe_threshold=0.7,
         dedupe_strategy='keep_highest_severity',
         top_n=3,
-        export_formats=['json', 'html']
+        export_formats=['json', 'html'],
+        show_quick_wins=True  # CTF mode shows quick wins
     ),
     
     'security-audit': ScanPreset(
@@ -126,7 +130,8 @@ PRESETS: Dict[str, ScanPreset] = {
         dedupe_strategy='keep_highest_severity',
         top_n=15,
         export_formats=['json', 'html', 'markdown'],
-        threat_model=True
+        threat_model=True,
+        show_quick_wins=True  # Pentest mode shows quick wins
     ),
     
     'compliance': ScanPreset(

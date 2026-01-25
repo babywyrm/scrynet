@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - 2026-01-24
 
+### Added - Phase 3: Quick Wins & Enhanced Display
+
+- **Quick Wins System**
+  - `--show-quick-wins` flag to highlight most exploitable findings
+  - Auto-enabled for CTF and pentest presets
+  - Displays exploitability scores, time-to-exploit, attack scenarios
+  - Smart filtering (score >=7 OR time<10min OR CRITICAL severity)
+  - Shows top 10 quick wins with colored output
+
+- **Enhanced Console Display**
+  - Exploitability scores visible in verbose mode (⚡8/10)
+  - Time-to-exploit display (🕐< 5 minutes)
+  - Attack scenario previews in quick wins
+  - Fixed color coding (CRITICAL/HIGH=red, MEDIUM=yellow, LOW=cyan)
+  - Smart top-n calculation (scales with findings: 10-20% of total)
+
 ### Added - Phase 2: Smart Presets & Enhanced Analysis
 
 - **Preset System** (`lib/config.py`)

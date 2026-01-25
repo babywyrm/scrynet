@@ -89,7 +89,8 @@ class Orchestrator:
                  prioritize: bool = False, prioritize_top: int = 15, question: Optional[str] = None,
                  generate_payloads: bool = False, annotate_code: bool = False, top_n: int = 5,
                  export_formats: Optional[List[str]] = None, output_dir: Optional[Path] = None,
-                 deduplicate: bool = False, dedupe_threshold: float = 0.7, dedupe_strategy: str = "keep_highest_severity"):
+                 deduplicate: bool = False, dedupe_threshold: float = 0.7, dedupe_strategy: str = "keep_highest_severity",
+                 show_quick_wins: bool = False):
         self.repo_path = repo_path.resolve()
         self.scanner_bin = scanner_bin.resolve()
         self.parallel = parallel
@@ -110,6 +111,7 @@ class Orchestrator:
         self.deduplicate = deduplicate
         self.dedupe_threshold = dedupe_threshold
         self.dedupe_strategy = dedupe_strategy
+        self.show_quick_wins = show_quick_wins
         
         # Initialize cost tracker
         self.cost_tracker = CostTracker()
@@ -353,12 +355,12 @@ Has Tests: {'Yes' if tech_info['has_tests'] else 'No'}
         findings_key = next((key for key in result if key.endswith("_findings")), None)
         findings = result.get(findings_key, [])
         
-        # Color code risk level
+        # Color code risk level (FIXED: Critical and High are red, Medium is yellow)
         risk_color = {
-            "CRITICAL": "red",
-            "HIGH": "yellow",
-            "MEDIUM": "cyan",
-            "LOW": "dim"
+            "CRITICAL": "bold red",
+            "HIGH": "red",
+            "MEDIUM": "yellow",
+            "LOW": "cyan"
         }.get(risk.upper(), "white")
         
         self.console.print(f"\n[bold cyan]📄 {file_path.name}[/bold cyan] [dim]({profile})[/dim]")
@@ -369,13 +371,20 @@ Has Tests: {'Yes' if tech_info['has_tests'] else 'No'}
                 sev = f.get('severity', 'UNK')
                 title = f.get('title', 'Unknown Issue')
                 line = f.get('line_number', '?')
+                
+                # Enhanced: Show exploitability score if available
+                exploit_score = f.get('exploitability_score', '')
+                exploit_str = f" [dim]⚡{exploit_score}/10[/dim]" if exploit_score else ""
+                
+                # Fixed color coding
                 sev_color = {
-                    "CRITICAL": "red",
-                    "HIGH": "yellow",
-                    "MEDIUM": "cyan",
-                    "LOW": "dim"
+                    "CRITICAL": "bold red",
+                    "HIGH": "red",
+                    "MEDIUM": "yellow",
+                    "LOW": "cyan"
                 }.get(sev.upper(), "white")
-                self.console.print(f"    [{sev_color}]●[/{sev_color}] {title} [dim](Line {line})[/dim]")
+                
+                self.console.print(f"    [{sev_color}]●[/{sev_color}] {title}{exploit_str} [dim](Line {line})[/dim]")
             if len(findings) > 5:
                 self.console.print(f"    [dim]... and {len(findings) - 5} more[/dim]")
     
@@ -1021,6 +1030,74 @@ Has Tests: {'Yes' if tech_info['has_tests'] else 'No'}
                 progress.advance(task)
                 time.sleep(0.5)  # Small delay
 
+    def _display_quick_wins(self, findings: List[Dict[str, Any]]) -> None:
+        """Display quick win summary highlighting most exploitable findings."""
+        # Filter for high exploitability findings
+        exploitable = []
+        for f in findings:
+            exploit_score = f.get('exploitability_score', 0)
+            time_to_exploit = f.get('time_to_exploit', '')
+            
+            # Consider it a quick win if:
+            # - Exploitability score >= 7, OR
+            # - Time to exploit mentions "minute" or "instant", OR
+            # - Severity is CRITICAL
+            is_quick_win = (
+                (exploit_score and exploit_score >= 7) or
+                (time_to_exploit and ('minute' in time_to_exploit.lower() or 'instant' in time_to_exploit.lower())) or
+                (f.get('severity', '').upper() == 'CRITICAL')
+            )
+            
+            if is_quick_win:
+                exploitable.append(f)
+        
+        if not exploitable:
+            return
+        
+        # Sort by exploitability score (highest first)
+        exploitable.sort(key=lambda x: x.get('exploitability_score', 0), reverse=True)
+        
+        # Display quick wins
+        self.console.print(f"\n[bold magenta]🎯 Quick Wins[/bold magenta] [dim]({len(exploitable)} highly exploitable findings)[/dim]")
+        self.console.print("[dim]These findings have high exploitability scores or fast time-to-exploit:[/dim]\n")
+        
+        for i, f in enumerate(exploitable[:10], 1):  # Show top 10
+            file_name = Path(f.get('file', '')).name
+            line_num = get_line_number(f)
+            title = f.get('title', 'Unknown')
+            severity = f.get('severity', 'UNKNOWN')
+            exploit_score = f.get('exploitability_score', '?')
+            time_to_exploit = f.get('time_to_exploit', 'Unknown')
+            
+            # Color by severity
+            sev_color = {
+                "CRITICAL": "bold red",
+                "HIGH": "red",
+                "MEDIUM": "yellow",
+                "LOW": "cyan"
+            }.get(severity.upper(), "white")
+            
+            # Format exploit info
+            exploit_info = f"⚡{exploit_score}/10" if exploit_score != '?' else ""
+            time_info = f"🕐{time_to_exploit}" if time_to_exploit != 'Unknown' else ""
+            meta = " ".join([exploit_info, time_info]).strip()
+            
+            self.console.print(
+                f"  [{sev_color}]{i}.[/{sev_color}] [{sev_color}]{title}[/{sev_color}] "
+                f"[dim]({file_name}:L{line_num})[/dim] "
+                f"[dim]{meta}[/dim]"
+            )
+            
+            # Show attack scenario if available
+            attack_scenario = f.get('attack_scenario', '')
+            if attack_scenario and isinstance(attack_scenario, str):
+                # Truncate long scenarios
+                scenario_display = attack_scenario[:100] + "..." if len(attack_scenario) > 100 else attack_scenario
+                self.console.print(f"     [dim]→ {scenario_display}[/dim]")
+        
+        if len(exploitable) > 10:
+            self.console.print(f"\n[dim]... and {len(exploitable) - 10} more exploitable findings[/dim]")
+
     def estimate_cost(self) -> Dict[str, Any]:
         """Estimate cost before running the scan."""
         all_files = self._get_files_to_scan()
@@ -1155,6 +1232,13 @@ Has Tests: {'Yes' if tech_info['has_tests'] else 'No'}
             self.console.print(f"[green]✓[/green] HTML report: {html_output_file}")
 
         # Get top findings for payload generation and annotation
+        # Use smart top-n if not explicitly set (default is 5)
+        effective_top_n = self.top_n
+        if self.top_n == 5 and len(combined) > 10:  # Default wasn't changed
+            effective_top_n = SmartDefaults.calculate_smart_top_n(len(combined))
+            if self.verbose:
+                self.console.print(f"[dim]💡 Smart default: Analyzing top {effective_top_n} findings (found {len(combined)} total)[/dim]")
+        
         top_findings = sorted(
             combined,
             key=lambda x: (
@@ -1162,7 +1246,7 @@ Has Tests: {'Yes' if tech_info['has_tests'] else 'No'}
                 if x.get("severity", "").upper() in Severity.__members__ else 99,
             ),
             reverse=True
-        )[:self.top_n]
+        )[:effective_top_n]
         
         # Run payload generation if requested
         if self.generate_payloads:
@@ -1215,13 +1299,14 @@ Has Tests: {'Yes' if tech_info['has_tests'] else 'No'}
                 source_display = source.replace('claude-', '').replace('scrynet', 'Static Scanner')
             summary_table.add_row(f"  • {source_display}:", str(count))
         
-        # Breakdown by severity
+        # Breakdown by severity (FIXED: proper color coding)
         summary_table.add_row("", "")  # Spacer
         summary_table.add_row("[bold]By Severity:[/bold]", "")
         for sev in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
             if sev in severity_counts:
                 count = severity_counts[sev]
-                color = {"CRITICAL": "red", "HIGH": "yellow", "MEDIUM": "blue", "LOW": "dim"}.get(sev, "")
+                # FIXED: Critical/High = red, Medium = yellow, Low = cyan
+                color = {"CRITICAL": "bold red", "HIGH": "red", "MEDIUM": "yellow", "LOW": "cyan"}.get(sev, "white")
                 summary_table.add_row(f"  • {sev}:", f"[{color}]{count}[/{color}]")
         
         # Deduplication summary
@@ -1236,6 +1321,10 @@ Has Tests: {'Yes' if tech_info['has_tests'] else 'No'}
             self.console.print(f"[dim]Original counts: Static: {len(static_findings)}, AI: {len(ai_findings)} → Combined: {len(combined)} (after deduplication)[/dim]")
         else:
             self.console.print(f"[dim]Breakdown: Static: {len(static_findings)}, AI: {len(ai_findings)}[/dim]")
+        
+        # Quick Wins Summary (if enabled)
+        if self.show_quick_wins:
+            self._display_quick_wins(combined)
         
         # Cost summary
         if self.cost_tracker.calls:
@@ -1410,6 +1499,8 @@ def main() -> None:
                         help="Enable smart defaults (auto-prioritize large repos, auto-deduplicate multiple profiles) (default: enabled)")
     parser.add_argument("--no-smart-defaults", action="store_true",
                         help="Disable smart defaults (use only explicitly specified options)")
+    parser.add_argument("--show-quick-wins", action="store_true",
+                        help="Display quick win summary with most exploitable findings (auto-enabled for CTF presets)")
     args = parser.parse_args()
 
     console = Console()
@@ -1519,7 +1610,8 @@ def main() -> None:
             output_dir=args.output_dir,
             deduplicate=args.deduplicate,
             dedupe_threshold=args.dedupe_threshold,
-            dedupe_strategy=args.dedupe_strategy
+            dedupe_strategy=args.dedupe_strategy,
+            show_quick_wins=args.show_quick_wins
         )
         
         console.print("\n[bold yellow]💰 Cost Estimation[/bold yellow]")
@@ -1617,7 +1709,8 @@ def main() -> None:
         output_dir=args.output_dir,
         deduplicate=args.deduplicate,
         dedupe_threshold=args.dedupe_threshold,
-        dedupe_strategy=args.dedupe_strategy
+        dedupe_strategy=args.dedupe_strategy,
+        show_quick_wins=args.show_quick_wins
     )
     orchestrator.run()
 
