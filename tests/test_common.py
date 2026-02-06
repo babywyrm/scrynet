@@ -295,15 +295,27 @@ class TestGetLineNumber(unittest.TestCase):
 class TestHandleAPIError(unittest.TestCase):
     """Test API error handling."""
     
+    def _create_mock_response(self, status_code: int):
+        """Helper to create mock httpx.Response with status code."""
+        from unittest.mock import Mock
+        import httpx
+        
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.status_code = status_code
+        mock_response.headers = {"request-id": "test-request-id"}
+        mock_response.text = ""
+        return mock_response
+    
     def test_rate_limit_retry(self):
         """Test that rate limit errors trigger retry."""
         import anthropic
         
-        # Mock APIStatusError with 429 status
+        # Create mock response with 429 status
+        mock_response = self._create_mock_response(429)
         error = anthropic.APIStatusError(
             message="Rate limit exceeded",
-            status_code=429,
-            response=None
+            response=mock_response,
+            body=None
         )
         
         should_retry, wait_time = handle_api_error(error, max_retries=3, attempt=0)
@@ -315,10 +327,11 @@ class TestHandleAPIError(unittest.TestCase):
         """Test that 529 errors trigger retry."""
         import anthropic
         
+        mock_response = self._create_mock_response(529)
         error = anthropic.APIStatusError(
             message="Service overloaded",
-            status_code=529,
-            response=None
+            response=mock_response,
+            body=None
         )
         
         should_retry, wait_time = handle_api_error(error, max_retries=3, attempt=0)
@@ -329,10 +342,11 @@ class TestHandleAPIError(unittest.TestCase):
         """Test that 4xx errors don't retry."""
         import anthropic
         
+        mock_response = self._create_mock_response(400)
         error = anthropic.APIStatusError(
             message="Bad request",
-            status_code=400,
-            response=None
+            response=mock_response,
+            body=None
         )
         
         with self.assertRaises(APIError):
@@ -342,10 +356,11 @@ class TestHandleAPIError(unittest.TestCase):
         """Test that 5xx errors trigger retry."""
         import anthropic
         
+        mock_response = self._create_mock_response(500)
         error = anthropic.APIStatusError(
             message="Internal server error",
-            status_code=500,
-            response=None
+            response=mock_response,
+            body=None
         )
         
         should_retry, wait_time = handle_api_error(error, max_retries=3, attempt=0)
@@ -356,10 +371,11 @@ class TestHandleAPIError(unittest.TestCase):
         """Test that max retries raises APIError."""
         import anthropic
         
+        mock_response = self._create_mock_response(429)
         error = anthropic.APIStatusError(
             message="Rate limit exceeded",
-            status_code=429,
-            response=None
+            response=mock_response,
+            body=None
         )
         
         with self.assertRaises(APIError):
