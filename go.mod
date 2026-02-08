@@ -1,4 +1,4 @@
-module scrynet
+module agentsmith
 
 go 1.23.0
 

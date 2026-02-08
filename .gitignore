@@ -10,9 +10,9 @@ scanner
 *output*
 *.gowasp.cache*
 
-# scrynet cache and review state
-.scrynet_cache/
-*.scrynet.cache*
+# agentsmith cache and review state
+.agentsmith_cache/
+*.agentsmith.cache*
 
 # Test targets (large repos, don't commit)
 *WebGoat*
