@@ -407,8 +407,9 @@ def main() -> None:
     console.print(f"[green]✓ Found {len(all_files)} files[/green]")
     
     # Initialize analyzer
-    api_key = get_api_key()
-    client = anthropic.Anthropic(api_key=api_key)
+    # Initialize AI client (supports both direct Anthropic API and AWS Bedrock)
+    from lib.ai_provider import create_client
+    client = create_client()
     resolved_model = resolve_model(args.model)
     analyzer = CTFAnalyzer(
         console=console,

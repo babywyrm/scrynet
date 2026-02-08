@@ -141,10 +141,9 @@ class Orchestrator:
         if debug and show_chains:
             logger.debug(f"Attack chain tracking ENABLED: show_chains={show_chains}")
 
-        self.api_key = os.getenv("CLAUDE_API_KEY")
-        if not self.api_key:
-            logger.error("CLAUDE_API_KEY environment variable not set.")
-            sys.exit(1)
+        # AI provider (supports both direct Anthropic API and AWS Bedrock)
+        from lib.ai_provider import create_client
+        self._ai_provider_factory = create_client
 
         sanitized_repo_name = str(repo_path).strip('/').replace('/', '_')
         if output_dir:
@@ -170,7 +169,7 @@ class Orchestrator:
                 self.console.print(f"[dim]   Critical files: {len(self.enhanced_tech_info['security_critical_files'])} security-sensitive files found[/dim]")
 
         self.prompt_templates = self._load_prompt_templates()
-        self.client = anthropic.Anthropic(api_key=self.api_key)
+        self.client = self._ai_provider_factory()
 
     def _build_app_context(self) -> Dict[str, any]:
         """Build application context for smarter analysis."""

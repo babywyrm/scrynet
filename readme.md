@@ -404,6 +404,12 @@ agentsmith/
 │   ├── ctf_enhanced_profile.txt
 │   ├── attacker_profile.txt
 │   └── ...
+├── mcp_server/                # MCP Server (SSE transport)
+│   ├── server.py              # SSE server entry point
+│   ├── tools.py               # Tool definitions and handlers
+│   ├── auth.py                # Bearer token middleware
+│   ├── config.py              # Server configuration
+│   └── requirements.txt       # MCP-specific dependencies
 ├── rules.go                   # Master rule definitions (Go source)
 ├── gen_rule_json.go           # Rule JSON generator utility
 ├── tests/                     # Test suite (190 tests)
@@ -535,6 +541,51 @@ python3 orchestrator.py /path/to/repo ./scanner --profile owasp
 
 **Note:** For most users, `agentsmith.py` is the recommended entry point.
 
+## MCP Server
+
+Agent Smith includes an MCP (Model Context Protocol) server that exposes scanning tools over SSE for integration with Claude, Cursor, and custom clients.
+
+### Quick Start
+
+```bash
+# Install MCP dependencies
+pip install -r mcp_server/requirements.txt
+
+# Start the server (dev mode)
+python3 -m mcp_server --no-auth
+
+# Start with authentication (production)
+export AGENTSMITH_MCP_TOKEN=your-secret-token
+python3 -m mcp_server --port 2266
+```
+
+### Available MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `scan_static` | Static analysis with 70+ OWASP rules (no API key needed) |
+| `scan_hybrid` | Full hybrid scan: static + AI analysis |
+| `detect_tech_stack` | Detect languages, frameworks, and security risks |
+| `summarize_results` | Summarize existing scan output |
+| `list_findings` | Get findings filtered by severity/source |
+| `list_presets` | List available scan presets |
+
+### AI Provider Support
+
+Agent Smith supports both direct Anthropic API and AWS Bedrock:
+
+```bash
+# Direct Anthropic API (default)
+export AGENTSMITH_PROVIDER=anthropic
+export CLAUDE_API_KEY=sk-ant-...
+
+# AWS Bedrock
+export AGENTSMITH_PROVIDER=bedrock
+export AWS_REGION=us-east-1
+```
+
+See [mcp_server/README.md](mcp_server/README.md) for full MCP documentation.
+
 ## Architecture
 
 Agent Smith uses a modular architecture:
@@ -542,6 +593,8 @@ Agent Smith uses a modular architecture:
 - **Entry Point**: `agentsmith.py` - Unified CLI dispatcher
 - **Analyzers**: `smart_analyzer.py`, `ctf_analyzer.py` - AI-powered analysis
 - **Orchestrator**: `orchestrator.py` - Hybrid static + AI
+- **MCP Server**: `mcp_server/` - SSE-based Model Context Protocol server
+- **AI Provider**: `lib/ai_provider.py` - Anthropic API / AWS Bedrock abstraction
 - **Library**: `lib/` - Shared modules (common, models, output, context, prompts)
 - **Scanner**: `scanner` - Fast Go-based static analyzer
 - **Rules**: `rules/` - JSON rule files (auto-loaded by orchestrator)

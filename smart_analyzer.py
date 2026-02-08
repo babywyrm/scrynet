@@ -1027,10 +1027,9 @@ def main() -> None:
                     console.print(f"[dim]{traceback.format_exc()}[/dim]")
             return
 
-    api_key = get_api_key()
-    # Initialize client with timeout for all API calls
-    # Note: timeout may need to be set via httpx_client if Anthropic SDK doesn't support it directly
-    client = anthropic.Anthropic(api_key=api_key)
+    # Initialize AI client (supports both direct Anthropic API and AWS Bedrock)
+    from lib.ai_provider import create_client
+    client = create_client()
     
     # Initialize context manager (handles both cache and review state)
     context = None

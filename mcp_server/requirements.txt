@@ -1,0 +1,16 @@
+# Agent Smith MCP Server Dependencies
+# Install with: pip install -r mcp_server/requirements.txt
+
+# MCP SDK with SSE transport
+mcp[cli]>=1.2.0
+
+# ASGI server
+uvicorn>=0.30.0
+
+# ASGI framework (used by MCP SSE transport)
+starlette>=0.40.0
+
+# Async support
+anyio>=4.0.0
+
+# Also requires Agent Smith core dependencies (../requirements.txt)
