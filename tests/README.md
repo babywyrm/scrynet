@@ -35,18 +35,19 @@ python3 -m unittest tests.test_integration.TestNormalizationIntegration -v
 - `test_orchestrator.py` - Tests for orchestrator functionality (5 tests)
 - `test_profiles.py` - Tests for profile loading (9 tests)
 - `test_integration.py` - Integration and workflow tests (5 tests)
-- `test_presets.py` - Preset system and smart defaults (13 tests)
+- `test_presets.py` - Preset system and smart defaults (14 tests)
 - `test_universal_detector.py` - Universal tech detection (10 tests)
 - `test_advanced_features.py` - Quick wins, file grouping, etc. (11 tests)
+- `test_mcp_tools.py` - MCP server tools and handlers (10 tests)
 - `test_imports.py` - Quick import verification
 - `test_context_lib.py` - Context/caching tests
-- `test_review_state.py` - Review state and cache management (13 tests) ⭐ NEW
-- `test_prioritization.py` - AI prioritization logic (20 tests) ⭐ NEW
-- `test_edge_cases.py` - Edge cases and error handling (31 tests) ⭐ NEW
+- `test_review_state.py` - Review state and cache management (13 tests)
+- `test_prioritization.py` - AI prioritization logic (20 tests)
+- `test_edge_cases.py` - Edge cases and error handling (31 tests)
 
 ## Test Coverage
 
-Current coverage: **146/146 tests passing (100%)** ✅
+Current coverage: **223 tests passing (100%)** ✅
 
 ### Covered
 ✅ Finding normalization (8 tests)
@@ -85,6 +86,8 @@ Real vulnerability test applications in `test_targets/`:
 ## Shell Scripts
 
 Located in `scripts/`:
+- `run_mcp_tests.sh` - Start MCP server (if needed) and run test suite
+- `run_mcp_shell.sh` - One-command setup + MCP server + interactive client
 - `test_dvwa.sh` - Test DVWA scan
 - `test_juice_shop.sh` - Test juice-shop scan
 - `test_advanced.sh` - Advanced feature tests
@@ -93,8 +96,10 @@ Located in `scripts/`:
 
 Run with:
 ```bash
-cd tests/scripts
-./test_dvwa.sh
+source scripts/activate.sh
+./scripts/run_mcp_tests.sh
+# or for interactive MCP client:
+./scripts/run_mcp_shell.sh
 ```
 
 ## Notes

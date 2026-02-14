@@ -168,13 +168,14 @@ class TestToolDefinitions(unittest.TestCase):
             self.assertIn("properties", schema)
 
     def test_tool_count(self):
-        self.assertEqual(len(TOOL_DEFINITIONS), 6)
-        self.assertEqual(len(TOOL_HANDLERS), 6)
+        self.assertEqual(len(TOOL_DEFINITIONS), 10)
+        self.assertEqual(len(TOOL_HANDLERS), 10)
 
     def test_handler_names(self):
         expected = {
             "scan_static", "scan_hybrid", "detect_tech_stack",
             "summarize_results", "list_findings", "list_presets",
+            "scan_file", "explain_finding", "get_fix", "scan_mcp",
         }
         self.assertEqual(set(TOOL_HANDLERS.keys()), expected)
 
@@ -191,8 +192,9 @@ class TestHandleListPresets(unittest.TestCase):
         data = json.loads(result)
         self.assertIn("presets", data)
         self.assertIn("count", data)
-        self.assertGreaterEqual(data["count"], 4)
+        self.assertGreaterEqual(data["count"], 7)
         names = [p["name"] for p in data["presets"]]
+        self.assertIn("mcp", names)
         self.assertIn("quick", names)
         self.assertIn("ctf", names)
         self.assertIn("pentest", names)

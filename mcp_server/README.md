@@ -102,8 +102,25 @@ Any MCP-compatible client can connect via:
 
 The built-in test client validates the server and provides an interactive REPL.
 
+### One-Command Setup (Recommended)
+
 ```bash
+# Start server + interactive client (log written to .mcp_server.log)
+./scripts/run_mcp_shell.sh
+
+# Same, with server debug logging
+./scripts/run_mcp_shell.sh --debug
+
 # Run automated test suite
+./scripts/run_mcp_tests.sh
+./scripts/run_mcp_tests.sh --all    # include scan_hybrid (needs API key)
+./scripts/run_mcp_tests.sh --json   # JSON output for CI
+```
+
+### Direct Client Usage
+
+```bash
+# Run automated test suite (server must already be running)
 python3 -m mcp_server.test_client test
 
 # Include AI-powered tools (needs CLAUDE_API_KEY)
@@ -127,6 +144,57 @@ python3 -m mcp_server.test_client test --json
 # Point at a different repo
 python3 -m mcp_server.test_client test --repo /path/to/repo
 ```
+
+### Watching Live Progress (Tail the Log)
+
+When using `run_mcp_shell.sh` or `run_mcp_tests.sh`, the server writes to `.mcp_server.log` in the project root. During long scans (e.g. `scan_hybrid`), the orchestrator streams its output to this log in real time.
+
+**In a second terminal:**
+
+```bash
+tail -f .mcp_server.log
+```
+
+You'll see:
+- API calls and token usage
+- Prioritization and file selection
+- Per-file analysis progress
+- Any orchestrator errors (404/400, credential issues, etc.)
+
+### Debug Mode
+
+| What | How |
+|------|-----|
+| **Server debug** | `./scripts/run_mcp_shell.sh --debug` or `python3 -m mcp_server --debug` — enables DEBUG-level logging for the MCP server itself |
+| **Orchestrator debug** | `export AGENTSMITH_MCP_DEBUG=1` before starting the server — `scan_hybrid` passes `--debug` to the orchestrator subprocess and includes `debug_log` in the response |
+| **Both** | Use `--debug` on the shell script and set `AGENTSMITH_MCP_DEBUG=1` for full visibility |
+
+### Interactive REPL Commands
+
+When in `interact` mode, type `help` at the `mcp>` prompt for the full list. Quick reference:
+
+| Command | Description |
+|---------|-------------|
+| `scan_static` | Static scan (repo auto-filled) |
+| `scan_hybrid` | Hybrid scan; use `{"preset": "mcp"}` for 2 files (~1 min) |
+| `summary` | Summarize last scan (severity counts, cost, artifacts) |
+| `findings [N]` | List findings from last scan (default 20) |
+| `annotations` | Show annotations from last scan |
+| `payloads` | Show payload files from last scan |
+| `scan_mcp {"target_url": "..."}` | Security-scan a remote MCP server |
+| `verbose` | Toggle verbose output (no truncation) |
+| `repo [path]` | Show or set default repo |
+| `status` | Show session config (server, repo, last output dir) |
+| `last` | Show last result as full JSON |
+| `quit` | Exit |
+
+### Test Client Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AGENTSMITH_MCP_READ_TIMEOUT` | `660` | Read timeout in seconds (11 min for long scans) |
+| `AGENTSMITH_MCP_NOPAGER` | — | Set to `1` to disable paging (less) for long output |
+| `AGENTSMITH_MCP_TEST_TARGET` | — | If set, adds `scan_mcp` test against this URL (e.g. `http://localhost:9001/sse` for DVMCP) |
 
 ## Configuration
 
@@ -155,6 +223,8 @@ All configuration via environment variables:
 | `AGENTSMITH_MCP_PORT` | `2266` | Port to listen on |
 | `AGENTSMITH_ALLOWED_PATHS` | cwd | Comma-separated allowed scan paths |
 | `AGENTSMITH_CORS_ORIGINS` | `http://localhost:*` | CORS allowed origins |
+| `AGENTSMITH_MCP_DEBUG` | — | Set to `1` or `true` to pass `--debug` to orchestrator in `scan_hybrid`; includes `debug_log` in response |
+| `AGENTSMITH_HYBRID_TIMEOUT` | `600` | Timeout in seconds for `scan_hybrid` subprocess |
 
 ### Path Security
 

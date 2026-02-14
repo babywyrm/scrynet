@@ -589,6 +589,8 @@ python3 -m mcp_server --no-auth
 ./scripts/run_mcp_tests.sh               # Start server, run automated test suite
 ./scripts/run_mcp_tests.sh --repo /path  # Use specific repo for tests
 
+# During long scans: tail -f .mcp_server.log (in another terminal) to see live progress
+
 # Start with authentication (production)
 export AGENTSMITH_MCP_TOKEN=your-secret-token
 python3 -m mcp_server --port 2266

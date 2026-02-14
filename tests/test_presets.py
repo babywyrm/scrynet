@@ -20,7 +20,7 @@ class TestPresetSystem(unittest.TestCase):
     
     def test_all_presets_exist(self):
         """Test that all expected presets are defined."""
-        expected_presets = ['quick', 'ctf', 'ctf-fast', 'security-audit', 'pentest', 'compliance']
+        expected_presets = ['mcp', 'quick', 'ctf', 'ctf-fast', 'security-audit', 'pentest', 'compliance']
         for preset_name in expected_presets:
             preset = get_preset(preset_name)
             self.assertIsNotNone(preset, f"Preset '{preset_name}' not found")
@@ -36,6 +36,18 @@ class TestPresetSystem(unittest.TestCase):
         self.assertTrue(preset.annotate_code)
         self.assertTrue(preset.deduplicate)
     
+    def test_mcp_preset_configuration(self):
+        """Test mcp preset is optimized for MCP (2 files, no payloads/annotations)."""
+        preset = get_preset('mcp')
+        self.assertIsNotNone(preset)
+        self.assertEqual(preset.name, 'mcp')
+        self.assertTrue(preset.prioritize)
+        self.assertEqual(preset.prioritize_top, 2)
+        self.assertFalse(preset.generate_payloads)
+        self.assertFalse(preset.annotate_code)
+        self.assertEqual(preset.export_formats, ['json'])
+        self.assertTrue(preset.parallel)
+
     def test_quick_preset_configuration(self):
         """Test quick preset is optimized for speed."""
         preset = get_preset('quick')
@@ -67,7 +79,7 @@ class TestPresetSystem(unittest.TestCase):
     def test_list_presets(self):
         """Test listing all presets."""
         presets = list_presets()
-        self.assertGreaterEqual(len(presets), 6)
+        self.assertGreaterEqual(len(presets), 7)
         
         # Check each preset has required attributes
         for preset in presets:
