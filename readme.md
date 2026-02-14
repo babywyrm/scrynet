@@ -583,6 +583,12 @@ pip install -r mcp_server/requirements.txt
 # Start the server (dev mode)
 python3 -m mcp_server --no-auth
 
+# One-command flows (start server if needed, then run client)
+./scripts/run_mcp_shell.sh              # Setup + server + interactive client
+./scripts/run_mcp_shell.sh --debug       # Same, with server debug logging
+./scripts/run_mcp_tests.sh               # Start server, run automated test suite
+./scripts/run_mcp_tests.sh --repo /path  # Use specific repo for tests
+
 # Start with authentication (production)
 export AGENTSMITH_MCP_TOKEN=your-secret-token
 python3 -m mcp_server --port 2266

@@ -56,6 +56,22 @@ class ScanPreset:
 # ============================================================================
 
 PRESETS: Dict[str, ScanPreset] = {
+    'mcp': ScanPreset(
+        name='mcp',
+        description='MCP-optimized: 2 files, no payloads/annotations (~1 min)',
+        profiles=['owasp'],
+        prioritize=True,
+        prioritize_top=2,
+        generate_payloads=False,
+        annotate_code=False,
+        deduplicate=True,
+        dedupe_threshold=0.7,
+        dedupe_strategy='keep_highest_severity',
+        top_n=0,
+        export_formats=['json'],
+        parallel=True
+    ),
+    
     'quick': ScanPreset(
         name='quick',
         description='Fast scan for CI/CD pipelines (10-15 prioritized files, JSON only)',

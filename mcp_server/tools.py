@@ -11,6 +11,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -75,8 +76,10 @@ def _validate_severity(severity: str | None) -> str | None:
     return severity
 
 
-def _find_output_dir(output_dir: str | None = None) -> Path:
-    """Find the output directory, defaulting to the most recent one."""
+def _find_output_dir(output_dir: str | None = None, prefer_has: str | None = None) -> Path:
+    """Find the output directory, defaulting to the most recent one.
+    If prefer_has is 'payloads' or 'annotations', pick the most recent dir that has that subdir with content.
+    """
     if output_dir:
         p = Path(output_dir).resolve()
         if not p.is_dir():
@@ -93,6 +96,17 @@ def _find_output_dir(output_dir: str | None = None) -> Path:
     )
     if not dirs:
         raise ValueError("No scan results found in output/. Run a scan first.")
+
+    if prefer_has == "payloads":
+        for d in dirs:
+            pay = d / "payloads"
+            if pay.is_dir() and any(pay.glob("*.json")):
+                return d
+    elif prefer_has == "annotations":
+        for d in dirs:
+            ann = d / "annotations"
+            if ann.is_dir() and any(ann.glob("*.md")):
+                return d
 
     return dirs[0]
 
@@ -203,13 +217,13 @@ TOOL_DEFINITIONS = [
                 },
                 "preset": {
                     "type": "string",
-                    "enum": ["quick", "ctf", "ctf-fast", "security-audit", "pentest", "compliance"],
-                    "description": "Use a preset configuration (overrides other options)",
+                    "enum": ["mcp", "quick", "ctf", "ctf-fast", "security-audit", "pentest", "compliance"],
+                    "description": "Use a preset. 'mcp' = 2 files, ~1 min; 'quick' = 10 files",
                 },
                 "prioritize_top": {
                     "type": "integer",
-                    "description": "Number of top files for AI to prioritize (default: 15)",
-                    "default": 15,
+                    "description": "Number of top files for AI to prioritize (default: 2 for MCP)",
+                    "default": 2,
                     "minimum": 1,
                     "maximum": 100,
                 },
@@ -223,6 +237,21 @@ TOOL_DEFINITIONS = [
                     "default": 5,
                     "minimum": 1,
                     "maximum": 20,
+                },
+                "generate_payloads": {
+                    "type": "boolean",
+                    "description": "Generate exploit payloads for top findings (overrides preset default)",
+                    "default": False,
+                },
+                "annotate_code": {
+                    "type": "boolean",
+                    "description": "Generate code annotations with fixes (overrides preset default)",
+                    "default": False,
+                },
+                "verbose": {
+                    "type": "boolean",
+                    "description": "Include orchestrator output in response (progress, API calls, cost table — same as CLI --verbose)",
+                    "default": True,
                 },
             },
         },
@@ -256,6 +285,11 @@ TOOL_DEFINITIONS = [
                 "output_dir": {
                     "type": "string",
                     "description": "Path to scan output directory (default: most recent in output/)",
+                },
+                "prefer_has": {
+                    "type": "string",
+                    "enum": ["payloads", "annotations"],
+                    "description": "Prefer most recent run that has payloads or annotations",
                 },
             },
         },
@@ -488,7 +522,7 @@ async def handle_scan_hybrid(arguments: dict[str, Any]) -> str:
     repo_path = _validate_path(arguments["repo_path"])
     profile = arguments.get("profile", "owasp")
     preset = arguments.get("preset")
-    prioritize_top = min(arguments.get("prioritize_top", 10), 50)  # cap at 50 via MCP
+    prioritize_top = min(arguments.get("prioritize_top", 2), 50)  # default 2 for MCP, cap 50
     top_n = min(arguments.get("top_n", 5), 20)  # cap payloads/annotations
     question = arguments.get("question", "find the most critical security vulnerabilities")
 
@@ -501,19 +535,27 @@ async def handle_scan_hybrid(arguments: dict[str, Any]) -> str:
     # Build orchestrator command
     # When a preset is specified, let the preset control all settings.
     # Only add extra flags when running without a preset.
+    mcp_debug = os.environ.get("AGENTSMITH_MCP_DEBUG", "").strip().lower() in ("1", "true", "yes")
     cmd = [
         sys.executable, str(PROJECT_ROOT / "orchestrator.py"),
         str(repo_path), str(SCANNER_BIN),
         "--verbose",
     ]
+    if mcp_debug:
+        cmd.append("--debug")
 
     if preset:
-        # Preset controls everything — only override prioritize_top if explicitly set
+        # Preset controls everything — always pass prioritize_top (default 4 for fast MCP runs)
         cmd.extend(["--preset", preset])
-        if arguments.get("prioritize_top"):
-            cmd.extend(["--prioritize-top", str(prioritize_top)])
+        cmd.extend(["--prioritize-top", str(prioritize_top)])
         if arguments.get("question"):
             cmd.extend(["--question", question])
+        if arguments.get("generate_payloads") is True:
+            cmd.append("--generate-payloads")
+        if arguments.get("annotate_code") is True:
+            cmd.append("--annotate-code")
+        if arguments.get("top_n") is not None:
+            cmd.extend(["--top-n", str(min(arguments["top_n"], 20))])
     else:
         # No preset — use explicit flags
         cmd.extend([
@@ -527,21 +569,65 @@ async def handle_scan_hybrid(arguments: dict[str, Any]) -> str:
             "--export-format", "json", "csv", "markdown", "html",
         ])
 
+    hybrid_timeout = int(os.environ.get("AGENTSMITH_HYBRID_TIMEOUT", "600"))  # default 10 min
+    run_env = os.environ.copy()
+    if run_env.get("AWS_REGION") and not run_env.get("AWS_DEFAULT_REGION"):
+        run_env["AWS_DEFAULT_REGION"] = run_env["AWS_REGION"]
+
+    # Stream orchestrator output to server log in real-time (tail -f .mcp_server.log to watch)
+    out_buf: list[str] = []
+    err_buf: list[str] = []
+
+    def _stream_reader(pipe, buf: list[str]):
+        for line in iter(pipe.readline, ""):
+            buf.append(line)
+            line = line.rstrip()
+            if line:
+                logger.info(f"[scan_hybrid] {line}")
+
     try:
-        proc = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=180,
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
             cwd=str(PROJECT_ROOT),
+            env=run_env,
         )
+        t_out = threading.Thread(target=_stream_reader, args=(proc.stdout, out_buf))
+        t_err = threading.Thread(target=_stream_reader, args=(proc.stderr, err_buf))
+        t_out.daemon = True
+        t_err.daemon = True
+        t_out.start()
+        t_err.start()
+        proc.wait(timeout=hybrid_timeout)
+        t_out.join(timeout=1)
+        t_err.join(timeout=1)
     except subprocess.TimeoutExpired:
-        return json.dumps({"error": "Hybrid scan timed out after 3 minutes. Try reducing prioritize_top or using --preset quick."})
+        proc.kill()
+        proc.wait()
+        return json.dumps({
+            "error": f"Hybrid scan timed out after {hybrid_timeout}s. "
+            "Use --preset quick for a faster run, or set AGENTSMITH_HYBRID_TIMEOUT (seconds) and restart the server."
+        })
     except Exception as e:
         return json.dumps({"error": f"Orchestrator failed: {e}"})
 
     if proc.returncode != 0:
+        stderr_text = "".join(err_buf)[-2000:]
         return json.dumps({
             "error": "Scan failed",
-            "stderr": proc.stderr[-2000:] if proc.stderr else "",
+            "stderr": stderr_text,
         })
+
+    # Include orchestrator output when verbose requested or AGENTSMITH_MCP_DEBUG
+    # (progress bars, API calls, cost table — same as CLI --verbose)
+    debug_log = None
+    want_output = arguments.get("verbose", True) or mcp_debug  # default True for MCP
+    combined = f"{''.join(out_buf)}\n{''.join(err_buf)}".strip()
+    if want_output and combined:
+        cap = 32_000 if arguments.get("verbose") else 4_000
+        debug_log = combined[-cap:] if len(combined) > cap else combined
 
     # Find the output directory (most recent)
     try:
@@ -549,20 +635,35 @@ async def handle_scan_hybrid(arguments: dict[str, Any]) -> str:
         combined = out_dir / "combined_findings.json"
         if combined.is_file():
             findings = json.loads(combined.read_text())
-            return json.dumps({
+            by_source = _count_by_key(findings, "source")
+            out = {
                 "status": "completed",
                 "output_dir": str(out_dir),
                 "total_findings": len(findings),
                 "by_severity": _count_by_key(findings, "severity"),
-                "by_source": _count_by_key(findings, "source"),
-            })
+                "by_source": by_source,
+            }
+            ai_sources = [k for k in by_source if k and k != "agentsmith"]
+            if not ai_sources and by_source.get("agentsmith", 0) > 0:
+                out["notice"] = (
+                    "Hybrid run completed but AI reported 0 findings. "
+                    "Check debug log for 404/400 (often = wrong AWS credentials in subprocess). "
+                    "Start the MCP server from a shell where you run: export AGENTSMITH_PROVIDER=bedrock AWS_REGION=us-west-2 AWS_PROFILE=your-profile (same as when CLI works). "
+                    "Then restart the server and try again."
+                )
+            if debug_log is not None:
+                out["debug_log"] = debug_log
+            return json.dumps(out)
     except Exception:
         pass
 
-    return json.dumps({
+    fallback = {
         "status": "completed",
         "message": "Scan finished. Check output/ directory for results.",
-    })
+    }
+    if debug_log is not None:
+        fallback["debug_log"] = debug_log
+    return json.dumps(fallback)
 
 
 async def handle_detect_tech_stack(arguments: dict[str, Any]) -> str:
@@ -581,7 +682,7 @@ async def handle_detect_tech_stack(arguments: dict[str, Any]) -> str:
 
 async def handle_summarize_results(arguments: dict[str, Any]) -> str:
     """Summarize existing scan results."""
-    out_dir = _find_output_dir(arguments.get("output_dir"))
+    out_dir = _find_output_dir(arguments.get("output_dir"), arguments.get("prefer_has"))
 
     summary: dict[str, Any] = {"output_dir": str(out_dir)}
 

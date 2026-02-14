@@ -549,26 +549,29 @@ class Orchestrator:
                 
                 self.console.print(table)
                 
-                # Interactive prompt
-                while True:
-                    prompt_text = f"\n[?] Proceed with all {len(prioritized_info)} files? ([Y]es / [N]o / Enter a number to analyze less): "
-                    choice = input(prompt_text).strip().lower()
-                    
-                    if choice in ("y", "yes", ""):
-                        break
-                    elif choice in ("n", "no"):
-                        self.console.print("[yellow]Analysis aborted by user.[/yellow]")
-                        sys.exit(0)
-                    elif choice.isdigit():
-                        num_to_analyze = int(choice)
-                        if 0 < num_to_analyze <= len(prioritized_info):
-                            prioritized_info = prioritized_info[:num_to_analyze]
-                            self.console.print(f"[dim]Proceeding with the top {num_to_analyze} file(s).[/dim]")
+                # Interactive prompt (skip when no TTY, e.g. MCP subprocess)
+                if sys.stdin.isatty():
+                    while True:
+                        prompt_text = f"\n[?] Proceed with all {len(prioritized_info)} files? ([Y]es / [N]o / Enter a number to analyze less): "
+                        choice = input(prompt_text).strip().lower()
+                        
+                        if choice in ("y", "yes", ""):
                             break
+                        elif choice in ("n", "no"):
+                            self.console.print("[yellow]Analysis aborted by user.[/yellow]")
+                            sys.exit(0)
+                        elif choice.isdigit():
+                            num_to_analyze = int(choice)
+                            if 0 < num_to_analyze <= len(prioritized_info):
+                                prioritized_info = prioritized_info[:num_to_analyze]
+                                self.console.print(f"[dim]Proceeding with the top {num_to_analyze} file(s).[/dim]")
+                                break
+                            else:
+                                self.console.print(f"[red]Please enter a number between 1 and {len(prioritized_info)}.[/red]")
                         else:
-                            self.console.print(f"[red]Please enter a number between 1 and {len(prioritized_info)}.[/red]")
-                    else:
-                        self.console.print("[red]Invalid input. Please enter 'y', 'n', or a number.[/red]")
+                            self.console.print("[red]Invalid input. Please enter 'y', 'n', or a number.[/red]")
+                else:
+                    self.console.print(f"[dim]Non-interactive mode: proceeding with all {len(prioritized_info)} prioritized files.[/dim]")
                 
                 # Map file names back to Path objects
                 # Use a smarter matching strategy: prefer unique matches, handle duplicates
@@ -1721,8 +1724,8 @@ def main() -> None:
     parser.add_argument("repo_path", type=Path, nargs='?', help="Path to repo to scan.")
     parser.add_argument("scanner_bin", type=Path, nargs='?', help="Path to Agent Smith scanner binary.")
     parser.add_argument("--preset", type=str.lower,
-                        choices=['quick', 'ctf', 'ctf-fast', 'security-audit', 'pentest', 'compliance'],
-                        help="Use a preset configuration (overrides individual flags). Available: quick, ctf, ctf-fast, security-audit, pentest, compliance. Use --list-presets to see details.")
+                        choices=['mcp', 'quick', 'ctf', 'ctf-fast', 'security-audit', 'pentest', 'compliance'],
+                        help="Use a preset configuration (overrides individual flags). Available: mcp (2 files, fastest), quick, ctf, ctf-fast, security-audit, pentest, compliance. Use --list-presets to see details.")
     parser.add_argument("--profile", type=str.lower, default="owasp",
                         help="Comma-separated list of AI profiles. Available: owasp, ctf, code_review, modern, soc2, pci, compliance, performance, attacker (e.g., 'owasp,ctf' or 'soc2,compliance').")
     parser.add_argument("--static-rules", type=str,
@@ -1883,6 +1886,7 @@ def main() -> None:
         user_set_show_chains = '--show-chains' in sys.argv
         user_set_show_quick_wins = '--show-quick-wins' in sys.argv
         user_set_threat_model = '--threat-model' in sys.argv
+        user_set_prioritize_top = '--prioritize-top' in sys.argv
         
         if args.debug:
             console.print(f"[dim]DEBUG: user_set_show_chains = {user_set_show_chains}[/dim]")
@@ -1891,6 +1895,8 @@ def main() -> None:
             arg_key = key.replace('-', '_')
             
             # Skip if user explicitly set this flag
+            if arg_key == 'prioritize_top' and user_set_prioritize_top:
+                continue
             if arg_key == 'show_chains' and user_set_show_chains:
                 console.print(f"[dim]💡 User override: --show-chains enabled (preset default overridden)[/dim]")
                 if args.debug:

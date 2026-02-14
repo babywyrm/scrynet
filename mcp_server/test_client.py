@@ -25,11 +25,86 @@ Usage:
 import argparse
 import asyncio
 import json
+import os
+import re
+import subprocess
 import sys
 import threading
 import time
+from io import StringIO
 from pathlib import Path
 from typing import Any
+
+# When output exceeds this many lines and stdout is a TTY, use a pager (less -R). Set AGENTSMITH_MCP_NOPAGER=1 to disable.
+PAGE_LINES = 28
+
+try:
+    import readline
+except ImportError:
+    readline = None  # Windows may not have readline
+
+
+def _drain_stdin() -> None:
+    """If stdin is a TTY and has pending input, read and discard it so the next input() gets a clean line."""
+    if not sys.stdin.isatty():
+        return
+    try:
+        import fcntl
+        fd = sys.stdin.fileno()
+        flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+        fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+        try:
+            while True:
+                try:
+                    ch = sys.stdin.read(1)
+                    if not ch:
+                        break
+                except (BlockingIOError, OSError):
+                    break
+        finally:
+            fcntl.fcntl(fd, fcntl.F_SETFL, flags)
+    except (ImportError, OSError):
+        pass
+
+
+class _paged_output:
+    """Context manager: capture print() and send through `less -R` when long (preserves color)."""
+
+    def __init__(self, min_lines: int = PAGE_LINES):
+        self.min_lines = min_lines
+        self._capture = (
+            sys.stdout.isatty()
+            and not os.environ.get("AGENTSMITH_MCP_NOPAGER")
+        )
+        self._buf: StringIO | None = None
+        self._old_stdout = None
+
+    def __enter__(self):
+        if self._capture:
+            self._buf = StringIO()
+            self._old_stdout = sys.stdout
+            sys.stdout = self._buf
+        return self
+
+    def __exit__(self, *args):
+        if not self._capture or self._buf is None:
+            return
+        sys.stdout = self._old_stdout
+        content = self._buf.getvalue()
+        line_count = len(content.splitlines())
+        if line_count > self.min_lines:
+            try:
+                subprocess.run(
+                    ["less", "-R", "-X"],
+                    input=content,
+                    text=True,
+                    check=False,
+                )
+            except (FileNotFoundError, OSError):
+                print(content, end="")
+        else:
+            print(content, end="")
+
 
 # ---------------------------------------------------------------------------
 # Colors
@@ -51,6 +126,74 @@ def c(text, color):
     if _no_color:
         return str(text)
     return f"{color}{text}{RESET}"
+
+
+def _colorize_json_line(line: str) -> str:
+    """Colorize a single line of pretty-printed JSON for readable verbose output."""
+    m = re.match(r"^(\s*)(.*?)(:\s*)(.*)$", line)
+    if not m:
+        return c(line, DIM)
+    indent, key_part, colon, value = m.groups()
+    out = indent
+    if key_part.strip().startswith('"'):
+        out += c(key_part, CYAN)
+    else:
+        out += key_part
+    out += c(colon, DIM)
+    v = value.strip()
+    if v.startswith('"') and v.endswith('"'):
+        out += c(value, GREEN)
+    elif v in ("true", "false", "null"):
+        out += c(value, DIM)
+    elif v and (v[0].isdigit() or (v.startswith("-") and len(v) > 1 and v[1].isdigit())):
+        out += c(value, YELLOW)
+    elif v in ("{", "}", "[", "]"):
+        out += c(value, MAGENTA)
+    else:
+        out += value
+    return out
+
+
+def _colorize_annotation_line(line: str, in_code_block: bool) -> tuple[str, bool]:
+    """Colorize one line of annotation markdown; returns (colored_line, next_in_code_block)."""
+    s = line.strip()
+    if s.startswith("```"):
+        return (c(line, DIM), not in_code_block)
+    if in_code_block:
+        if "// FLAW" in line:
+            idx = line.find("// FLAW")
+            rest = line[idx:]
+            colon = rest.find(":")
+            if colon != -1:
+                prefix = line[:idx]
+                flaw_label = rest[: colon + 1]
+                after = rest[colon + 1 :]
+                return (prefix + c(flaw_label, RED) + c(after, DIM), True)
+            return (line[:idx] + c(rest, RED), True)
+        if "// FIX" in line:
+            idx = line.find("// FIX")
+            rest = line[idx:]
+            colon = rest.find(":")
+            if colon != -1:
+                prefix = line[:idx]
+                fix_label = rest[: colon + 1]
+                after = rest[colon + 1 :]
+                return (prefix + c(fix_label, GREEN) + c(after, DIM), True)
+            return (line[:idx] + c(rest, GREEN), True)
+        if "//" in line:
+            i = line.index("//")
+            return (line[:i] + c(line[i:], DIM), True)
+        return (c(line, DIM), True)
+    if s.startswith("##") or s.startswith("#"):
+        return (c(line, BOLD), False)
+    m = re.match(r"^(\s*)(\*\*[^*]+\*\*:\s*)(.*)$", line)
+    if m:
+        indent, label_part, value = m.groups()
+        return (indent + c(label_part, BOLD) + c(value, CYAN), False)
+    if s.startswith("- ") or s.startswith("* "):
+        lead = line[: len(line) - len(s)]
+        return (lead + c(s[:2], CYAN) + s[2:], False)
+    return (line, False)
 
 
 # ---------------------------------------------------------------------------
@@ -126,10 +269,11 @@ async def connect(url: str, retries: int = 2, delay: float = 1.0):
     from mcp.client.sse import sse_client
     from mcp import ClientSession
 
+    sse_read_timeout = float(os.environ.get("AGENTSMITH_MCP_READ_TIMEOUT", "660"))  # 11 min for long scans
     last_err = None
     for attempt in range(1, retries + 1):
         try:
-            ctx = sse_client(url)
+            ctx = sse_client(url, timeout=10.0, sse_read_timeout=sse_read_timeout)
             streams = await ctx.__aenter__()
             read_stream, write_stream = streams[0], streams[1]
             session = ClientSession(read_stream, write_stream)
@@ -171,7 +315,7 @@ def _detect_repo_path() -> str | None:
 
 async def mode_test(url: str, tool_filter: str | None = None,
                     include_all: bool = False, repo_path: str | None = None,
-                    json_output: bool = False, quiet: bool = False):
+                    json_output: bool = False, quiet: bool = False, verbose: bool = False):
     """Run automated test suite against the MCP server."""
     results = []
     repo_path = repo_path or _detect_repo_path()
@@ -242,10 +386,21 @@ async def mode_test(url: str, tool_filter: str | None = None,
                 ok = True
                 messages = []
                 has_error = "error" in data
+                skipped_ai = False
 
                 if has_error and not tc.get("expect_error"):
-                    ok = False
-                    messages.append(f"unexpected error: {data['error']}")
+                    err = data.get("error", "")
+                    stderr = (data.get("stderr") or "").lower()
+                    if tool in ("explain_finding", "get_fix") and "AI tools require" in err and "CLAUDE_API_KEY" in err:
+                        skipped_ai = True
+                        messages.append("AI not configured (set CLAUDE_API_KEY or use Bedrock)")
+                    elif tool == "scan_hybrid" and err.strip() == "Scan failed":
+                        if any(x in stderr for x in ("claude_api_key", "api key", "api_key", "environment variable not set", "not set")):
+                            skipped_ai = True
+                            messages.append("AI not configured (set CLAUDE_API_KEY or use Bedrock)")
+                    if not skipped_ai:
+                        ok = False
+                        messages.append(f"unexpected error: {err}")
                 elif has_error and tc.get("expect_error"):
                     ok = True
                     messages.append(f"got expected error")
@@ -256,7 +411,7 @@ async def mode_test(url: str, tool_filter: str | None = None,
                             ok = False
                         messages.append(msg)
 
-                status = "PASS" if ok else "FAIL"
+                status = "SKIP" if skipped_ai else ("PASS" if ok else "FAIL")
                 results.append({
                     "name": name, "tool": tool, "status": status,
                     "elapsed_ms": round(elapsed_ms, 1),
@@ -265,16 +420,21 @@ async def mode_test(url: str, tool_filter: str | None = None,
                 })
 
                 if not json_output:
-                    icon = c("PASS", GREEN) if ok else c("FAIL", RED)
+                    if status == "SKIP":
+                        icon = c("SKIP", YELLOW)
+                    else:
+                        icon = c("PASS", GREEN) if ok else c("FAIL", RED)
                     check_summary = "; ".join(messages)
                     print(f"    {icon} {c(f'({elapsed_ms:.0f}ms)', DIM)} {check_summary}")
 
                     # Always show rich detail (unless quiet)
                     if not quiet:
-                        if has_error and tc.get("expect_error"):
+                        if status == "SKIP":
+                            print(f"    {c('(set CLAUDE_API_KEY or AGENTSMITH_PROVIDER=bedrock to run)', DIM)}")
+                        elif has_error and tc.get("expect_error"):
                             print(f"    {c('blocked', DIM)}: {data['error'][:70]}")
                         elif not has_error:
-                            _print_result_detail(tool, data)
+                            _print_result_detail(tool, data, verbose=verbose)
 
             except Exception as e:
                 spinner.stop()
@@ -298,12 +458,13 @@ async def mode_test(url: str, tool_filter: str | None = None,
     # Summary
     passed = sum(1 for r in results if r["status"] == "PASS")
     failed = sum(1 for r in results if r["status"] in ("FAIL", "ERROR"))
+    skipped = sum(1 for r in results if r["status"] == "SKIP")
     total = len(results)
     total_ms = sum(r["elapsed_ms"] for r in results)
 
     if json_output:
         print(json.dumps({
-            "passed": passed, "failed": failed, "total": total,
+            "passed": passed, "failed": failed, "skipped": skipped, "total": total,
             "total_ms": round(total_ms, 1),
             "results": results,
         }, indent=2, default=str))
@@ -311,6 +472,8 @@ async def mode_test(url: str, tool_filter: str | None = None,
         print(f"{c('Results', BOLD)}")
         print(f"{'=' * 60}")
         print(f"  Passed:     {c(str(passed), GREEN)}")
+        if skipped:
+            print(f"  Skipped:   {c(str(skipped), YELLOW)} (AI not configured)")
         if failed:
             print(f"  Failed:     {c(str(failed), RED)}")
         print(f"  Total:      {total}")
@@ -468,6 +631,15 @@ def _build_test_cases(repo_path, tool_filter, include_all, available_tools):
     add("reject file traversal attack", "scan_file",
         {"file_path": "/etc/passwd"}, expect_error=True)
 
+    # --- scan_mcp (optional: set AGENTSMITH_MCP_TEST_TARGET to a running MCP server URL, e.g. DVMCP) ---
+    mcp_target = os.environ.get("AGENTSMITH_MCP_TEST_TARGET", "").strip()
+    if mcp_target and "scan_mcp" in available_tools:
+        add("scan MCP server (security)", "scan_mcp",
+            {"target_url": mcp_target}, [
+            lambda d: ("summary" in d or "findings" in d, "has summary or findings"),
+            lambda d: ("error" not in d, "no error"),
+        ])
+
     # --- scan_hybrid (only if --all) ---
     # Uses tight defaults: prioritize top 5 files, quick preset to keep it fast
     if include_all and repo_path:
@@ -484,8 +656,16 @@ def _build_test_cases(repo_path, tool_filter, include_all, available_tools):
 # Result detail printing (always shown unless --quiet)
 # ---------------------------------------------------------------------------
 
-def _print_result_detail(tool_name: str, data: dict):
+def _print_result_detail(tool_name: str, data: dict, *, verbose: bool = False):
     """Print detailed, informative result for each tool."""
+    if data.get("debug_log"):
+        n_lines = 60 if verbose else 25
+        lines = data["debug_log"].splitlines()[-n_lines:]
+        print(f"    {c('Debug log (orchestrator stderr):', BOLD)}")
+        for line in lines:
+            print(f"      {c(line[:120], DIM)}")
+        if not verbose and len(data["debug_log"].splitlines()) > n_lines:
+            print(f"      {c('(... run client with -v for more)', DIM)}")
     if tool_name == "list_presets":
         for p in data.get("presets", []):
             profiles = ", ".join(p.get("profiles", [])) or "default"
@@ -516,12 +696,15 @@ def _print_result_detail(tool_name: str, data: dict):
         if by_source:
             print(f"      Sources:    {', '.join(f'{k} ({v})' for k, v in by_source.items())}")
 
-        if cost:
-            cost_usd = cost.get('cost_usd', 0)
+        if cost or verbose:
             print(f"    {c('Cost:', BOLD)}")
-            print(f"      API calls:  {cost.get('api_calls', 0)}")
-            print(f"      Tokens:     {cost.get('total_tokens', 0):,}")
-            print(f"      Cost:       {c(f'${cost_usd:.3f}', GREEN)}")
+            if cost:
+                cost_usd = cost.get('cost_usd', 0)
+                print(f"      API calls:  {cost.get('api_calls', 0)}")
+                print(f"      Tokens:     {cost.get('total_tokens', 0):,}")
+                print(f"      Cost:       {c(f'${cost_usd:.3f}', GREEN)}")
+            else:
+                print(f"      {c('(no cost tracking — run scan_hybrid for AI/Claude/Bedrock costs)', DIM)}")
 
         if artifacts.get("payloads") or artifacts.get("annotations"):
             print(f"    {c('Artifacts:', BOLD)}")
@@ -550,10 +733,12 @@ def _print_result_detail(tool_name: str, data: dict):
         returned = data.get("returned", 0)
         total = data.get("total_matched", 0)
         filters = data.get("filters", {})
+        findings_list = data.get("findings", [])
+        cap = len(findings_list) if verbose else 8
         print(f"    {c(f'{returned} of {total} matched', DIM)} "
               f"(severity>={filters.get('severity', 'any')}, "
               f"source={filters.get('source', 'any')})")
-        for f in data.get("findings", [])[:8]:
+        for f in findings_list[:cap]:
             sev = f.get("severity", "?")
             color = {"CRITICAL": RED, "HIGH": RED, "MEDIUM": YELLOW, "LOW": CYAN}.get(sev, DIM)
             title = f.get("title", "?")[:50]
@@ -565,8 +750,8 @@ def _print_result_detail(tool_name: str, data: dict):
             print(f"      {'':>14} {c(loc, DIM)}")
             if rec:
                 print(f"      {'':>14} {c(rec[:65], GREEN)}")
-        if returned > 8:
-            print(f"      {c(f'... and {returned - 8} more', DIM)}")
+        if returned > cap:
+            print(f"      {c(f'... and {returned - cap} more', DIM)}")
 
     elif tool_name == "detect_tech_stack":
         langs = data.get("languages", [])
@@ -753,6 +938,10 @@ def _print_result_detail(tool_name: str, data: dict):
             print(f"    {c('Sources:', BOLD)}   {', '.join(f'{k} ({v})' for k, v in by_source.items())}")
         if outdir:
             print(f"    {c('Output:', BOLD)}    {outdir}")
+            print(f"    {c('To see cost & full summary:', DIM)} summarize_results {{\"output_dir\": \"{outdir}\"}}")
+            print(f"    {c('To list findings from this run:', DIM)} list_findings {{\"output_dir\": \"{outdir}\", \"severity\": \"CRITICAL\", \"limit\": 10}}")
+        if data.get("notice"):
+            print(f"    {c('Note:', YELLOW)} {data['notice']}")
 
     else:
         keys = list(data.keys())
@@ -762,6 +951,53 @@ def _print_result_detail(tool_name: str, data: dict):
 # ---------------------------------------------------------------------------
 # Mode: interact
 # ---------------------------------------------------------------------------
+
+async def _run_full_scan(session, tools: dict, repo_path: str, spinner: Spinner) -> dict | None:
+    """Run a complete scan: detect_tech_stack → static or hybrid → summarize → list_findings."""
+    print(f"  {c('Complete scan', BOLD)} using repo: {c(repo_path, DIM)}")
+    try:
+        choice = input(f"  Static only (s) or Hybrid with AI (h)? {c('[h]', DIM)} ").strip().lower() or "h"
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return None
+    use_hybrid = choice == "h"
+
+    steps = [
+        ("detect_tech_stack", {"repo_path": repo_path}),
+        (
+            "scan_hybrid" if use_hybrid else "scan_static",
+            {"repo_path": repo_path, "preset": "quick", "prioritize_top": 5,
+             "question": "find the most critical vulnerabilities"} if use_hybrid
+            else {"repo_path": repo_path, "severity": "HIGH"},
+        ),
+        ("summarize_results", {}),
+        ("list_findings", {"severity": "CRITICAL", "limit": 10}),
+    ]
+
+    last = None
+    for i, (tool_name, args) in enumerate(steps, 1):
+        if tool_name not in tools:
+            continue
+        print(f"  {c(f'Step {i}/{len(steps)}', BOLD)}: {tool_name}")
+        spinner.start(f"Running {tool_name}...")
+        t0 = time.monotonic()
+        try:
+            result = await session.call_tool(tool_name, args)
+            elapsed_ms = (time.monotonic() - t0) * 1000
+            spinner.stop()
+            data = json.loads(result.content[0].text)
+            last = data
+            if "error" in data:
+                print(f"    {c('Error', YELLOW)}: {data['error']}")
+            else:
+                _print_result_detail(tool_name, data, verbose=True)
+            print(f"    {c(f'({elapsed_ms:.0f}ms)', DIM)}")
+        except Exception as e:
+            spinner.stop()
+            print(f"    {c('FAIL', RED)}: {type(e).__name__}: {e}")
+        print()
+    return last
+
 
 async def mode_interact(url: str, repo_path: str | None = None):
     """Interactive REPL for calling MCP tools."""
@@ -797,13 +1033,38 @@ async def mode_interact(url: str, repo_path: str | None = None):
         tools = {t.name: t for t in tools_result.tools}
 
         print(f"{c('Connected', GREEN)} - {len(tools)} tools available")
-        print(f"Type {c('tools', CYAN)} to list them, {c('help', CYAN)} for commands, {c('quit', CYAN)} to exit.")
+        print(f"Type {c('tools', CYAN)} to list them, {c('help', CYAN)} for commands, {c('scan', CYAN)} for full scan, {c('status', CYAN)} for session config, {c('quit', CYAN)} to exit. {c('Tab', DIM)} to autocomplete.")
         print()
 
         last_result = None
+        last_output_dir = None
+        verbose = False
+
+        _BUILTINS = (
+            "help", "quit", "exit", "q", "scan", "summary", "findings",
+            "annotations", "payloads", "everything", "verbose", "repo",
+            "tools", "list_presets", "last", "status", "state",
+        )
+        _completion_list = sorted(set(_BUILTINS) | set(tools.keys()))
+
+        def _complete(text: str, state: int):
+            if not text:
+                return None
+            matches = [m for m in _completion_list if m.startswith(text)]
+            return matches[state] if state < len(matches) else None
+
+        if readline is not None:
+            readline.set_completer(_complete)
+            readline.set_completer_delims(" \t\n")
+            readline.parse_and_bind("tab: complete")
+            try:
+                readline.parse_and_bind(r"\C-i: complete")
+            except Exception:
+                pass
 
         while True:
             try:
+                _drain_stdin()
                 line = input(f"{c('mcp', MAGENTA)}> ").strip()
             except (EOFError, KeyboardInterrupt):
                 print()
@@ -817,19 +1078,265 @@ async def mode_interact(url: str, repo_path: str | None = None):
 
             if line == "help":
                 print(f"  {c('Commands:', BOLD)}")
+                print(f"    {c('scan', CYAN)}                  Run a complete scan (tech stack → static/hybrid → summary → findings)")
+                print(f"    {c('summary', CYAN)}               Summary + cost for last scan")
+                print(f"    {c('findings', CYAN)} [N|all]     Findings from last scan (default 20); verbose = show all returned")
+                print(f"    {c('annotations', CYAN)}           Annotation files; verbose = full content of every file")
+                print(f"    {c('payloads', CYAN)}              Payload files; verbose = full JSON of every file")
+                print(f"    {c('everything', CYAN)}            Dump full run: summary + all findings + all annotations + all payloads)")
+                print(f"    {c('verbose', CYAN)}              Toggle verbose (no truncation; full content for annotations/payloads/findings)")
+                print(f"    {c('repo', CYAN)} [path]           Show or set default repo (e.g. repo /path/to/repo)")
                 print(f"    {c('tools', CYAN)}                 List available tools")
                 print(f"    {c('<tool_name>', CYAN)}           Call a tool (prompts for args)")
                 print(f"    {c('<tool_name> {json}', CYAN)}    Call with inline JSON args")
                 print(f"    {c('last', CYAN)}                  Show last result (full JSON)")
+                print(f"    {c('status', CYAN)} / {c('state', CYAN)}        Show session config (server, repo, verbose, last output)")
                 print(f"    {c('help', CYAN)}                  Show this help")
                 print(f"    {c('quit', CYAN)}                  Exit (or Ctrl+C)")
+                print(f"  {c('Long output', DIM)} is paged (less); set AGENTSMITH_MCP_NOPAGER=1 to disable.")
+                print(f"  {c('Progress', DIM)}: tail -f .mcp_server.log in another terminal to see API calls live.")
                 print()
                 print(f"  {c('Examples:', BOLD)}")
-                print(f'    scan_file {{"file_path": "/path/to/file.py"}}')
-                print(f'    scan_static {{"repo_path": "/path/to/repo", "severity": "HIGH"}}')
-                print(f'    explain_finding {{"file_path": "/path/to/file.py", "description": "SQL injection", "line_number": 42}}')
-                print(f'    get_fix {{"file_path": "/path/to/file.py", "description": "hardcoded password"}}')
-                print(f'    list_presets')
+                print(f'    scan_static {{"severity": "HIGH"}}   # repo_path auto-filled')
+                print(f'    scan_hybrid {{"preset": "mcp"}}              # 2 files, ~1 min')
+                print(f'    scan_hybrid {{"preset": "quick"}}             # 10 files')
+                print(f'    scan_mcp {{"target_url": "http://localhost:9001/sse"}}')
+                print(f'    summary')
+                print(f'    findings 50')
+                print()
+                continue
+
+            if line == "verbose":
+                verbose = not verbose
+                print(f"  Verbose: {c('on', GREEN) if verbose else c('off', DIM)}")
+                print()
+                continue
+
+            if line == "repo" or line.startswith("repo "):
+                rest = line[4:].strip()
+                if not rest:
+                    if repo_path:
+                        print(f"  Default repo: {c(repo_path, CYAN)}")
+                    else:
+                        print(f"  {c('No default repo set', DIM)}. Use: repo /path/to/repo")
+                else:
+                    new_path = str(Path(rest).expanduser().resolve())
+                    if not Path(new_path).is_dir():
+                        print(f"  {c('Not a directory (or missing)', RED)}: {new_path}")
+                    else:
+                        repo_path = new_path
+                        print(f"  Default repo set to: {c(repo_path, CYAN)}")
+                print()
+                continue
+
+            if line in ("status", "state"):
+                print(f"  {c('Session', BOLD)}")
+                print(f"    Server:        {c(url, CYAN)}")
+                print(f"    Default repo:  {c(repo_path or '(none)', DIM)}")
+                print(f"    Verbose:       {c('on' if verbose else 'off', DIM)}")
+                print(f"    Last output:   {c(last_output_dir or '(none)', DIM)}")
+                print(f"    Tools:         {len(tools)}")
+                print()
+                continue
+
+            if line == "summary":
+                args = {"output_dir": last_output_dir} if last_output_dir else {}
+                if not last_output_dir:
+                    print(f"  {c('No last scan output dir', DIM)} — using most recent output/ dir")
+                print(f"  {c('Calling', DIM)}: summarize_results")
+                spinner.start("Running summarize_results...")
+                t0 = time.monotonic()
+                try:
+                    result = await session.call_tool("summarize_results", args)
+                    spinner.stop()
+                    data = json.loads(result.content[0].text)
+                    with _paged_output():
+                        _print_result_detail("summarize_results", data, verbose=True)
+                    print(f"  {c(f'({(time.monotonic()-t0)*1000:.0f}ms)', DIM)}")
+                except Exception as e:
+                    spinner.stop()
+                    print(f"  {c('FAIL', RED)}: {e}")
+                print()
+                continue
+
+            if line.startswith("findings"):
+                rest = line[8:].strip()
+                limit = 20
+                if rest == "all":
+                    limit = 500
+                elif rest.isdigit():
+                    limit = min(int(rest), 500)
+                args = {"severity": "CRITICAL", "limit": limit}
+                if last_output_dir:
+                    args["output_dir"] = last_output_dir
+                else:
+                    print(f"  {c('No last scan output dir', DIM)} — using most recent output/ dir")
+                print(f"  {c('Calling', DIM)}: list_findings (limit={limit})")
+                spinner.start("Running list_findings...")
+                t0 = time.monotonic()
+                try:
+                    result = await session.call_tool("list_findings", args)
+                    spinner.stop()
+                    data = json.loads(result.content[0].text)
+                    with _paged_output():
+                        _print_result_detail("list_findings", data, verbose=verbose)
+                    print(f"  {c(f'({(time.monotonic()-t0)*1000:.0f}ms)', DIM)}")
+                except Exception as e:
+                    spinner.stop()
+                    print(f"  {c('FAIL', RED)}: {e}")
+                print()
+                continue
+
+            if line == "scan":
+                if not repo_path:
+                    print(f"  {c('No default repo', YELLOW)}. Set --repo or run detect_tech_stack with a repo_path first.")
+                    print()
+                    continue
+                last_result = await _run_full_scan(session, tools, repo_path, spinner)
+                print()
+                continue
+
+            if line == "annotations":
+                if not last_output_dir:
+                    try:
+                        result = await session.call_tool("summarize_results", {"prefer_has": "annotations"})
+                        data = json.loads(result.content[0].text)
+                        if data.get("output_dir") and "error" not in data:
+                            last_output_dir = data["output_dir"]
+                            print(f"  {c('Using latest run with annotations', DIM)}: {last_output_dir[:60]}...")
+                        else:
+                            print(f"  {c('No run with annotations found', DIM)} — run a hybrid scan with annotate_code first.")
+                            print()
+                            continue
+                    except Exception as e:
+                        print(f"  {c('Could not get output dir', DIM)}: {e}")
+                        print()
+                        continue
+                ann_dir = Path(last_output_dir) / "annotations"
+                if not ann_dir.is_dir():
+                    print(f"  {c('No annotations dir', DIM)} at {ann_dir}")
+                    print()
+                    continue
+                files = sorted(ann_dir.glob("*.md"))
+                with _paged_output():
+                    print(f"  {c('Annotations', BOLD)} ({len(files)} files) from last run")
+                    for f in files:
+                        print(f"  {c('---', DIM)} {f.name}")
+                        if verbose:
+                            try:
+                                body = f.read_text(encoding="utf-8", errors="replace")
+                                in_code = False
+                                for ln in body.splitlines():
+                                    colored, in_code = _colorize_annotation_line(ln, in_code)
+                                    print(f"    {colored}")
+                            except Exception as e:
+                                print(f"    {c(str(e), RED)}")
+                        else:
+                            print(f"    {c('(use verbose to show full content)', DIM)}")
+                print()
+                continue
+
+            if line == "payloads":
+                if not last_output_dir:
+                    try:
+                        result = await session.call_tool("summarize_results", {"prefer_has": "payloads"})
+                        data = json.loads(result.content[0].text)
+                        if data.get("output_dir") and "error" not in data:
+                            last_output_dir = data["output_dir"]
+                            print(f"  {c('Using latest run with payloads', DIM)}: {last_output_dir[:60]}...")
+                        else:
+                            print(f"  {c('No run with payloads found', DIM)} — run a hybrid scan with generate_payloads first.")
+                            print()
+                            continue
+                    except Exception as e:
+                        print(f"  {c('Could not get output dir', DIM)}: {e}")
+                        print()
+                        continue
+                pay_dir = Path(last_output_dir) / "payloads"
+                if not pay_dir.is_dir():
+                    print(f"  {c('No payloads dir', DIM)} at {pay_dir}")
+                    print()
+                    continue
+                files = sorted(pay_dir.glob("*.json"))
+                with _paged_output():
+                    print(f"  {c('Payloads', BOLD)} ({len(files)} files) from last run")
+                    for f in files:
+                        print(f"  {c('---', DIM)} {f.name}")
+                        if verbose:
+                            try:
+                                data = json.loads(f.read_text(encoding="utf-8", errors="replace"))
+                                for ln in json.dumps(data, indent=2).splitlines():
+                                    print(f"    {_colorize_json_line(ln)}")
+                            except Exception as e:
+                                print(f"    {c(str(e), RED)}")
+                        else:
+                            print(f"    {c('(use verbose to show full content)', DIM)}")
+                print()
+                continue
+
+            if line == "everything":
+                if not last_output_dir:
+                    try:
+                        result = await session.call_tool("summarize_results", {"prefer_has": "payloads"})
+                        data = json.loads(result.content[0].text)
+                        if data.get("output_dir") and "error" not in data:
+                            last_output_dir = data["output_dir"]
+                        else:
+                            result = await session.call_tool("summarize_results", {})
+                            data = json.loads(result.content[0].text)
+                            if data.get("output_dir") and "error" not in data:
+                                last_output_dir = data["output_dir"]
+                            else:
+                                print(f"  {c('No scan output found', DIM)} — run a hybrid scan first.")
+                                print()
+                                continue
+                    except Exception as e:
+                        print(f"  {c('Could not get output dir', DIM)}: {e}")
+                        print()
+                        continue
+                print(f"  {c('Full output from last run', BOLD)} (no truncation)")
+                print()
+                try:
+                    result = await session.call_tool("summarize_results", {"output_dir": last_output_dir})
+                    data = json.loads(result.content[0].text)
+                    with _paged_output():
+                        _print_result_detail("summarize_results", data, verbose=True)
+                except Exception as e:
+                    print(f"    {c('FAIL', RED)}: {e}")
+                print()
+                try:
+                    result = await session.call_tool("list_findings", {"output_dir": last_output_dir, "limit": 500})
+                    data = json.loads(result.content[0].text)
+                    with _paged_output():
+                        _print_result_detail("list_findings", data, verbose=True)
+                except Exception as e:
+                    print(f"    {c('FAIL', RED)}: {e}")
+                print()
+                ann_dir = Path(last_output_dir) / "annotations"
+                if ann_dir.is_dir():
+                    with _paged_output():
+                        print(f"  {c('Annotations (full)', BOLD)}")
+                        for f in sorted(ann_dir.glob("*.md")):
+                            print(f"  {c('---', DIM)} {f.name}")
+                            try:
+                                in_code = False
+                                for ln in f.read_text(encoding="utf-8", errors="replace").splitlines():
+                                    colored, in_code = _colorize_annotation_line(ln, in_code)
+                                    print(f"    {colored}")
+                            except Exception as e:
+                                print(f"    {c(str(e), RED)}")
+                pay_dir = Path(last_output_dir) / "payloads"
+                if pay_dir.is_dir():
+                    with _paged_output():
+                        print(f"  {c('Payloads (full)', BOLD)}")
+                        for f in sorted(pay_dir.glob("*.json")):
+                            print(f"  {c('---', DIM)} {f.name}")
+                            try:
+                                pay_data = json.loads(f.read_text(encoding="utf-8", errors="replace"))
+                                for ln in json.dumps(pay_data, indent=2).splitlines():
+                                    print(f"    {_colorize_json_line(ln)}")
+                            except Exception as e:
+                                print(f"    {c(str(e), RED)}")
                 print()
                 continue
 
@@ -872,6 +1379,9 @@ async def mode_interact(url: str, repo_path: str | None = None):
                 except json.JSONDecodeError:
                     print(f"  {c('Invalid JSON', RED)}: {inline_args}")
                     continue
+                if "repo_path" not in args and repo_path and tool_name in ("scan_hybrid", "scan_static", "detect_tech_stack"):
+                    args["repo_path"] = repo_path
+                    print(f"  {c('(using default repo_path)', DIM)}")
             else:
                 args = _prompt_for_args(tool, repo_path)
 
@@ -885,11 +1395,34 @@ async def mode_interact(url: str, repo_path: str | None = None):
                 text = result.content[0].text
                 data = json.loads(text)
                 last_result = data
+                if data.get("output_dir"):
+                    last_output_dir = data["output_dir"]
 
                 if "error" in data:
                     print(f"  {c('Error', YELLOW)}: {data['error']}")
+                    stderr = (data.get("stderr") or "").strip()
+                    if stderr:
+                        lines = stderr.splitlines()[-15:]
+                        print(f"  {c('Details (orchestrator stderr):', DIM)}")
+                        for ln in lines:
+                            print(f"    {c(ln[:120], DIM)}")
+                        if "api" in stderr.lower() or "key" in stderr.lower() or "bedrock" in stderr.lower():
+                            print(f"  {c('Tip: set env in the shell where you START the MCP server (CLAUDE_API_KEY or AGENTSMITH_PROVIDER=bedrock + AWS_REGION).', DIM)}")
                 else:
-                    _print_result_detail(tool_name, data)
+                    with _paged_output():
+                        _print_result_detail(tool_name, data, verbose=verbose)
+                    if tool_name == "scan_hybrid" and data.get("output_dir") and "error" not in data:
+                        if data.get("notice"):
+                            print(f"  {c('⚠ ', YELLOW)}{c(data['notice'], YELLOW)}")
+                        print(f"  {c('---', DIM)}")
+                        print(f"  {c('Summary for this run:', BOLD)}")
+                        try:
+                            sum_result = await session.call_tool("summarize_results", {"output_dir": data["output_dir"]})
+                            sum_data = json.loads(sum_result.content[0].text)
+                            with _paged_output():
+                                _print_result_detail("summarize_results", sum_data, verbose=True)
+                        except Exception:
+                            pass
                 print(f"  {c(f'({elapsed_ms:.0f}ms)', DIM)}")
 
             except Exception as e:
@@ -1110,6 +1643,8 @@ def main():
     parser.add_argument("--all", action="store_true", help="Include slow tools (scan_hybrid)")
     parser.add_argument("--json", action="store_true", help="JSON output (for CI/CD)")
     parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output (pass/fail only)")
+    parser.add_argument("--verbose", "-v", action="store_true",
+                        help="Show cost block, orchestrator debug log (when present), and extra detail")
     parser.add_argument("--no-color", action="store_true", help="Disable color output")
     parser.add_argument("--iterations", type=int, default=3, help="Benchmark iterations (default: 3)")
     args = parser.parse_args()
@@ -1119,7 +1654,7 @@ def main():
 
     if args.mode == "test":
         ok = asyncio.run(mode_test(
-            args.url, args.tool, args.all, args.repo, args.json, args.quiet
+            args.url, args.tool, args.all, args.repo, args.json, args.quiet, args.verbose
         ))
     elif args.mode == "interact":
         ok = asyncio.run(mode_interact(args.url, args.repo))
