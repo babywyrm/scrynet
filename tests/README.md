@@ -83,6 +83,18 @@ Real vulnerability test applications in `test_targets/`:
 - juice-shop - OWASP Juice Shop
 - WebGoat - OWASP WebGoat
 
+## MCP Tester Scanner
+
+The MCP server exposes `scan_mcp` to security-scan remote MCP servers. Two ways to exercise it:
+
+| Method | Command |
+|--------|---------|
+| **Interactive shell** | `./scripts/run_mcp_shell.sh` → at `mcp>` type `scan_mcp {"target_url": "http://localhost:9001/sse"}` |
+| **Automated test** | `AGENTSMITH_MCP_TEST_TARGET=http://localhost:2266/sse ./scripts/run_mcp_tests.sh` (adds scan_mcp test) |
+| **DVMCP suite** | `./tests/test_dvmcp.sh` or `./tests/test_dvmcp.sh 1 8` (requires DVMCP cloned at `tests/test_targets/DVMCP`) |
+
+See [mcp_server/README.md](../mcp_server/README.md) and [docs/MCP_SCANNING.md](../docs/MCP_SCANNING.md) for full docs.
+
 ## Shell Scripts
 
 Located in `scripts/`:

@@ -606,6 +606,9 @@ python3 -m mcp_server --port 2266
 | `summarize_results` | Summarize existing scan output |
 | `list_findings` | Get findings filtered by severity/source |
 | `list_presets` | List available scan presets |
+| `scan_mcp` | Security-scan remote MCP servers (enumerate tools, check auth, analyze risks) |
+
+**Scan MCP from the shell:** `./scripts/run_mcp_shell.sh` → at `mcp>` type `scan_mcp {"target_url": "http://localhost:9001/sse"}`. See [docs/MCP_SCANNING.md](docs/MCP_SCANNING.md).
 
 ### AI Provider Support
 

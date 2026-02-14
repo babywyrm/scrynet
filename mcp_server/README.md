@@ -52,7 +52,7 @@ The server starts on **port 2266** by default with both SSE and Streamable HTTP 
 |------|-------------|
 | `scan_mcp` | Security-scan a remote MCP server: enumerate tools/resources, check auth, analyze for dangerous capabilities and injection vectors |
 
-See [docs/MCP_SCANNING.md](../docs/MCP_SCANNING.md) for the full scanning guide with architecture diagrams, DVMCP walkthrough, and security checks reference.
+See [docs/MCP_SCANNING.md](../docs/MCP_SCANNING.md) for the full scanning guide with architecture diagrams, DVMCP walkthrough, and security checks reference. Ideas for future improvements: [mcp_server/ROADMAP.md](ROADMAP.md).
 
 ### AI-Powered (requires `CLAUDE_API_KEY` or Bedrock)
 
@@ -181,12 +181,30 @@ When in `interact` mode, type `help` at the `mcp>` prompt for the full list. Qui
 | `findings [N]` | List findings from last scan (default 20) |
 | `annotations` | Show annotations from last scan |
 | `payloads` | Show payload files from last scan |
-| `scan_mcp {"target_url": "..."}` | Security-scan a remote MCP server |
+| `scan_mcp` or `scan_mcp {"target_url": "..."}` | Security-scan a remote MCP server (prompts for URL if omitted) |
 | `verbose` | Toggle verbose output (no truncation) |
 | `repo [path]` | Show or set default repo |
 | `status` | Show session config (server, repo, last output dir) |
 | `last` | Show last result as full JSON |
 | `quit` | Exit |
+
+### Scan MCP Servers from the Shell
+
+Yes — you can run `scan_mcp` directly from the interactive shell. It's the intended workflow.
+
+```bash
+# Terminal 1: Start shell (server + client)
+./scripts/run_mcp_shell.sh
+
+# Terminal 2 (optional): Start DVMCP targets for practice
+./tests/test_dvmcp.sh --setup-only
+
+# Back in Terminal 1, at mcp> prompt:
+scan_mcp {"target_url": "http://localhost:9001/sse"}   # DVMCP challenge 1
+scan_mcp {"target_url": "http://localhost:2266/sse"}   # Self-scan (audit your own server)
+```
+
+Type `scan_mcp` alone to be prompted for the target URL. See [docs/MCP_SCANNING.md](../docs/MCP_SCANNING.md) for the full DVMCP walkthrough and security checks reference.
 
 ### Test Client Environment Variables
 
