@@ -52,7 +52,8 @@ var rules []Rule
 var ruleMap = map[string]Rule{}
 
 var supportedExtensions = map[string]bool{
-	".go": true, ".js": true, ".py": true, ".java": true, ".html": true, ".php": true,
+	".go": true, ".js": true, ".ts": true, ".tsx": true, ".py": true, ".java": true,
+	".html": true, ".php": true, ".rb": true, ".yml": true, ".yaml": true,
 }
 
 // severityLevels provides a numeric weight for sorting and filtering.

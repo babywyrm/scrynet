@@ -67,6 +67,12 @@ Add patterns for modern stacks:
 
 **Idea:** If `package.json` exists → load `rules_node.json`. If `requirements.txt` → load `rules_python.json`. Reduces noise (no PHP rules on Node projects) and allows framework-specific patterns.
 
+### Phase 5: Future Rules
+
+- LLM prompt injection (contextual; defer to AI analysis)
+- Next.js Server Actions SSRF
+- Narrow Axios/Go SSRF to reduce false positives
+
 ---
 
 ## Where to Begin

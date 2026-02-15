@@ -13,6 +13,7 @@ Index of documentation in this directory.
 | [AGENTSMITH_CONTEXT_README.md](AGENTSMITH_CONTEXT_README.md) | Context library API: `ReviewContextManager`, caching, cost tracking |
 | [CHANGELOG.md](CHANGELOG.md) | Release history and changes |
 | [STATIC_SCANNER_STRATEGY.md](STATIC_SCANNER_STRATEGY.md) | Static scanner as prioritization engine, improvement roadmap |
+| [../rules/CHANGELOG.md](../rules/CHANGELOG.md) | Rules changelog — additions and changes |
 
 ## Quick Links
 

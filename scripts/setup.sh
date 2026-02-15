@@ -68,6 +68,11 @@ if [ "$PYTHON_ONLY" = false ]; then
             exit 1
         fi
 
+        # Validate rules before build
+        if python3 -c "import json" 2>/dev/null && [ -d rules ]; then
+            python3 scripts/validate_rules.py || { echo "❌ Rules validation failed"; exit 1; }
+        fi
+
         echo "  Building scanner binary..."
         go build -o scanner agentsmith.go
         chmod +x scanner

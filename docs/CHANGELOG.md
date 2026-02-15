@@ -18,6 +18,9 @@ All notable changes to this project will be documented in this file.
 - **Static → Prioritization**: Hybrid scans now feed static findings into the AI prioritization prompt; files with static hits are preferred for deep-dive analysis (saves AI cost, improves coverage)
 - **Node.js/Mongoose rules**: New rules in rules_core.json for Mongoose `findByIdAndUpdate(req.body)`, `Model.update(req.body)`, mass assignment, and req.params in MongoDB queries
 - **docs/STATIC_SCANNER_STRATEGY.md**: Strategy doc for static scanner improvements and prioritization logic
+- **rules/CHANGELOG.md**: Rules changelog for rule additions and changes
+- **Modern framework rules**: Prisma unsafe raw SQL, React dangerouslySetInnerHTML, Go fmt.Sprintf in SQL, Ruby ActiveRecord raw SQL; Java (Spring/Quarkus), Python (Django/FastAPI/SQLAlchemy) framework rules
+- **Scanner extensions**: Now scans `.ts`, `.tsx`, `.rb`, `.yml`, `.yaml`
 
 ### Changed
 

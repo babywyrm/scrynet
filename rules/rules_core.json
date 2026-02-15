@@ -1080,5 +1080,37 @@
     "category": "A01",
     "description": "Pydantic model_dump() passed to ORM - mass assignment if model has extra fields",
     "remediation": "Explicitly select fields: model_dump(include={'field1','field2'})."
+  },
+  {
+    "name": "Prisma Unsafe Raw SQL",
+    "pattern": "(?i)\\$queryRawUnsafe|\\$executeRawUnsafe|\\$queryRaw\\s*\\([^)]*\\+\\s*|\\$executeRaw\\s*\\([^)]*\\+",
+    "severity": "CRITICAL",
+    "category": "A03",
+    "description": "Prisma raw SQL without parameterization - SQL injection risk",
+    "remediation": "Use $queryRaw with Prisma.sql template literal; never $queryRawUnsafe with user input."
+  },
+  {
+    "name": "React dangerouslySetInnerHTML",
+    "pattern": "(?i)dangerouslySetInnerHTML\\s*=",
+    "severity": "HIGH",
+    "category": "A07",
+    "description": "React dangerouslySetInnerHTML - XSS if content is user-controlled",
+    "remediation": "Sanitize HTML (e.g. DOMPurify) or use textContent; avoid with user input."
+  },
+  {
+    "name": "Go SQL with fmt.Sprintf",
+    "pattern": "(?i)\\.(Exec|Query|QueryRow)\\s*\\([^)]*fmt\\.Sprintf",
+    "severity": "CRITICAL",
+    "category": "A03",
+    "description": "Go SQL built with fmt.Sprintf - SQL injection risk",
+    "remediation": "Use parameterized queries with ? placeholder and args."
+  },
+  {
+    "name": "Ruby ActiveRecord Raw SQL",
+    "pattern": "(?i)(execute|select_all|find_by_sql)\\s*\\([^)]*#\\{|ActiveRecord::Base\\.connection\\.execute\\s*\\([^)]*\\+",
+    "severity": "CRITICAL",
+    "category": "A03",
+    "description": "Ruby ActiveRecord raw SQL with interpolation - SQL injection",
+    "remediation": "Use parameterized queries: where('id = ?', id) or sanitize_sql_array."
   }
 ]
