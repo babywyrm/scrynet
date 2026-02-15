@@ -509,11 +509,27 @@ async def handle_scan_static(arguments: dict[str, Any]) -> str:
     except json.JSONDecodeError:
         return json.dumps({"error": "Failed to parse scanner output"})
 
+    # Persist to output/ so list_findings/summary work (tied to this repo)
+    sanitized = str(repo_path).strip("/").replace("/", "_").replace("\\", "_")
+    out_dir = OUTPUT_DIR / sanitized
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for f in findings:
+        f.setdefault("source", "agentsmith")
+        f.setdefault("file_path", f.get("file", ""))
+        f.setdefault("title", f.get("rule_name", "unknown"))
+    static_file = out_dir / "static_findings.json"
+    combined_file = out_dir / "combined_findings.json"
+    with open(static_file, "w", encoding="utf-8") as fp:
+        json.dump(findings, fp, indent=2)
+    with open(combined_file, "w", encoding="utf-8") as fp:
+        json.dump(findings, fp, indent=2)
+
     return json.dumps({
         "findings": findings[:MAX_OUTPUT_FINDINGS],
         "count": len(findings),
         "truncated": len(findings) > MAX_OUTPUT_FINDINGS,
         "rules_loaded": len(rule_files),
+        "output_dir": str(out_dir),
     })
 
 
@@ -802,6 +818,7 @@ async def handle_list_findings(arguments: dict[str, Any]) -> str:
         "returned": len(slim),
         "total_matched": total_matched,
         "filters": {"severity": severity, "source": source_filter},
+        "output_dir": str(out_dir),
     })
 
 

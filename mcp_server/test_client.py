@@ -734,7 +734,10 @@ def _print_result_detail(tool_name: str, data: dict, *, verbose: bool = False):
         total = data.get("total_matched", 0)
         filters = data.get("filters", {})
         findings_list = data.get("findings", [])
+        out_dir = data.get("output_dir", "")
         cap = len(findings_list) if verbose else 8
+        if out_dir:
+            print(f"    {c('From:', BOLD)} {c(out_dir, CYAN)}")
         print(f"    {c(f'{returned} of {total} matched', DIM)} "
               f"(severity>={filters.get('severity', 'any')}, "
               f"source={filters.get('source', 'any')})")
@@ -804,8 +807,11 @@ def _print_result_detail(tool_name: str, data: dict, *, verbose: bool = False):
         count = data.get("count", 0)
         rules = data.get("rules_loaded", 0)
         truncated = data.get("truncated", False)
+        out_dir = data.get("output_dir", "")
         print(f"    {c(f'{count} findings from {rules} rule files', DIM)}"
               f"{'  (truncated to 500)' if truncated else ''}")
+        if out_dir:
+            print(f"    {c('Saved to:', BOLD)} {c(out_dir, CYAN)}  {c('(use findings to list)', DIM)}")
 
         # Show severity breakdown from findings
         findings = data.get("findings", [])
@@ -1101,7 +1107,7 @@ async def mode_interact(url: str, repo_path: str | None = None):
                 print(f"  {c('Commands:', BOLD)}")
                 print(f"    {c('scan', CYAN)}                  Run a complete scan (tech stack → static/hybrid → summary → findings)")
                 print(f"    {c('summary', CYAN)}               Summary + cost for last scan")
-                print(f"    {c('findings', CYAN)} [N|all]     Findings from last scan (default 20); verbose = show all returned")
+                print(f"    {c('findings', CYAN)} [N|all]     Findings from last scan (default 20); shows source dir")
                 print(f"    {c('annotations', CYAN)}           Annotation files; verbose = full content of every file")
                 print(f"    {c('payloads', CYAN)}              Payload files; verbose = full JSON of every file")
                 print(f"    {c('everything', CYAN)}            Dump full run: summary + all findings + all annotations + all payloads)")
@@ -1197,7 +1203,7 @@ async def mode_interact(url: str, repo_path: str | None = None):
                 if last_output_dir:
                     args["output_dir"] = last_output_dir
                 else:
-                    print(f"  {c('No last scan output dir', DIM)} — using most recent output/ dir")
+                    print(f"  {c('Using most recent output/', DIM)} (run scan_static to tie findings to current repo)")
                 print(f"  {c('Calling', DIM)}: list_findings (limit={limit})")
                 spinner.start("Running list_findings...")
                 t0 = time.monotonic()
