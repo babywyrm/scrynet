@@ -1,0 +1,45 @@
+# Agent Smith CI Gate — fail on HIGH+ findings
+# Copy to .github/workflows/security.yml in your repo
+#
+# Scans your repo with Agent Smith static scanner; fails the job if any HIGH/CRITICAL findings.
+# Requires: Agent Smith in a sibling dir or clone in workflow.
+
+name: Security Scan
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  static-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clone Agent Smith
+        run: git clone --depth 1 https://github.com/babywyrm/agentsmith.git agentsmith
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate rules
+        working-directory: agentsmith
+        run: pip install -r requirements.txt -q && python3 scripts/validate_rules.py
+
+      - name: Build scanner
+        working-directory: agentsmith
+        run: go build -o scanner agentsmith.go
+
+      - name: Run static scan (fail on HIGH+)
+        run: |
+          pip install -r agentsmith/requirements.txt -q
+          python3 agentsmith/agentsmith.py static . agentsmith/scanner --severity HIGH --fail-on HIGH

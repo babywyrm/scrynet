@@ -15,3 +15,7 @@ Rule additions and changes. See `docs/STATIC_SCANNER_STRATEGY.md` for roadmap. V
 
 ### Scanner
 - Extended file types: `.ts`, `.tsx`, `.rb`, `.yml`, `.yaml`
+
+### Tech-stack-aware rules
+- **rules_node.json**: Loaded when `package.json` detected. Adds: `child_process.exec`, `vm.runInContext`
+- **rules_python.json**: Loaded when `requirements.txt` detected. Adds: `pickle.loads`, `yaml.load`

@@ -2,7 +2,7 @@
 
 Practical examples for common security analysis scenarios.
 
-**See also:** [ADVANCED_EXAMPLES.md](ADVANCED_EXAMPLES.md) (multi-profile, deduplication) · [MCP_SCANNING.md](MCP_SCANNING.md) (scan MCP servers) · [PROFILES.md](PROFILES.md) (AI profiles)
+**See also:** [examples/README.md](../examples/README.md) (CI, pre-commit) · [ADVANCED_EXAMPLES.md](ADVANCED_EXAMPLES.md) (multi-profile, deduplication) · [MCP_SCANNING.md](MCP_SCANNING.md) (scan MCP servers) · [PROFILES.md](PROFILES.md) (AI profiles)
 
 ## 🚀 Simple Use Cases (5 minutes or less)
 
@@ -20,6 +20,8 @@ python3 agentsmith.py static ./myapp --severity HIGH
 ```
 
 **When to use:** CI/CD pipelines, pre-commit checks, quick audits
+
+**Pre-commit:** See [examples/README.md](../examples/README.md) for `pre-commit-hook.sh` and `.pre-commit-config.yaml` — block commits with CRITICAL findings.
 
 ---
 

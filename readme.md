@@ -19,7 +19,7 @@
 - **Multiple Export Formats**: JSON, CSV, Markdown, and HTML reports
 - **Precise Location Tracking**: File paths and line numbers in all outputs
 - **Unified CLI**: Single entry point (`agentsmith.py`) for all modes
-- **Auto-loaded Rules**: 70+ OWASP rules loaded automatically from `rules/` directory
+- **Auto-loaded Rules**: 70+ OWASP rules from `rules/`; tech-stack-aware (Node/Python rules when detected)
 - **Preset System**: 7 optimized presets for common workflows (`--preset mcp`, `--preset ctf`, `--preset pentest`, etc.)
 - **Smart Defaults**: Auto-prioritization, auto-deduplication, and smart top-n
 
@@ -121,10 +121,12 @@ python3 agentsmith.py static /path/to/repo --severity HIGH --output json
 **Options:**
 - `--rules`: Comma-separated rule files
 - `--severity`: Minimum severity (CRITICAL, HIGH, MEDIUM, LOW)
-- `--output`: Output format (text, json, markdown)
+- `--output`: Output format (text, json, markdown, sarif)
 - `--verbose`: Show remediation advice
 - `--git-diff`: Scan only changed files
 - `--ignore`: Comma-separated glob patterns
+- `--ignore-rules`: Suppress specific rules (or use `.scannerignore`)
+- `--fail-on`: Exit 1 on CRITICAL/HIGH (for CI gates)
 
 #### 2. Analyze Mode (AI-Powered)
 
@@ -530,7 +532,7 @@ API Usage Summary
 
 ## Tips for Effective Scanning
 
-1. **For CI/CD**: Use `static` mode with `--severity HIGH` for fast, free checks
+1. **For CI/CD**: Use `static` mode with `--severity HIGH` and `--fail-on HIGH` for fast, free checks. See `examples/ci-gate.yml` and `examples/pre-commit-hook.sh`.
 2. **For Deep Reviews**: Use `analyze` mode with `--enable-review-state`
 3. **For CTF Challenges**: Use `ctf` mode for quick vulnerability discovery
 4. **For Comprehensive Analysis**: Use `orchestrator.py` or `agentsmith.py hybrid` with `--prioritize` (RECOMMENDED)

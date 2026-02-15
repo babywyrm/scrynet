@@ -9,17 +9,41 @@ from __future__ import annotations
 import json as _json
 import os
 from pathlib import Path
-from typing import Any, List
+from typing import Any, Dict, List, Optional
 
 
 class CTFPromptFactory:
     """Generates CTF-focused prompts optimized for quick vulnerability discovery."""
 
     @staticmethod
-    def prioritization(all_files: List[Path], question: str, limit: int) -> str:
+    def prioritization(
+        all_files: List[Path],
+        question: str,
+        limit: int,
+        static_findings: Optional[List[Dict[str, Any]]] = None,
+    ) -> str:
         """Prioritize files for CTF - focus on entry points, configs, auth, and vulnerable patterns."""
         filenames = [f.name for f in all_files]
-        
+        static_context = ""
+        if static_findings:
+            by_file: Dict[str, List[str]] = {}
+            for f in static_findings:
+                file_path = f.get("file", "")
+                if file_path:
+                    name = Path(file_path).name
+                    rule = f.get("rule_name", f.get("title", "?"))
+                    sev = f.get("severity", "")
+                    label = f"{rule}" + (f" ({sev})" if sev else "")
+                    by_file.setdefault(name, []).append(label)
+            if by_file:
+                summary = {name: findings[:5] for name, findings in by_file.items()}
+                static_context = f"""
+Static Scanner Results (pre-analyzed — prioritize files with findings):
+{_json.dumps(summary, indent=2)}
+
+Files with static findings should be prioritized first; the AI will confirm and expand.
+"""
+
         # CTF-specific guidance
         ctf_priority_hints = """
 CTF PRIORITY CHECKLIST:
@@ -36,13 +60,13 @@ CTF PRIORITY CHECKLIST:
         return f"""You are a CTF security expert. Your task is to identify the most likely files to contain vulnerabilities or flags for this CTF challenge.
 
 User Question: "{question}"
-
+{static_context}
 {ctf_priority_hints}
 
 File List:
 {_json.dumps(filenames, indent=2)}
 
-Return a JSON object with a single key "prioritized_files". This key should contain a list of objects, where each object has a "file_name" and a "reason" explaining why it's likely to contain vulnerabilities or flags. Prioritize files that:
+Return a JSON object with a single key "prioritized_files". This key should contain a list of objects, where each object has a "file_name" and a "reason" explaining why it's likely to contain vulnerabilities or flags. When static scanner results are provided, strongly prefer files that already have findings. Otherwise prioritize files that:
 1. Handle user input (forms, APIs, uploads)
 2. Contain authentication/authorization logic
 3. Perform file operations or database queries

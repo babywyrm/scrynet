@@ -2,6 +2,11 @@
 
 Ideas and planned improvements for the Agent Smith MCP server and `scan_mcp` tool. Not a commitment — just a living backlog.
 
+## Done (see docs/STRETCH_GOALS.md)
+
+- Example CI config (`examples/ci-gate.yml`), pre-commit hook (`examples/pre-commit-hook.sh`)
+- SARIF export, whitelist/ignore (`.scannerignore`, `--ignore-rules`)
+
 ## Current State
 
 - **10 tools** exposed: scan_static, scan_file, scan_hybrid, detect_tech_stack, summarize_results, list_findings, list_presets, explain_finding, get_fix, scan_mcp

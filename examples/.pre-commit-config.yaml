@@ -1,0 +1,20 @@
+# Agent Smith pre-commit — fail on CRITICAL findings
+#
+# Setup:
+#   1. Copy this file to your repo root: cp agentsmith/examples/.pre-commit-config.yaml .pre-commit-config.yaml
+#   2. Edit the 'entry' path to point to your Agent Smith clone (or use AGENTSMITH_PATH)
+#   3. pip install pre-commit && pre-commit install
+#
+# Or use a local hook:
+#   pre-commit install --hook-type pre-commit
+#
+# Env: AGENTSMITH_PATH (path to Agent Smith repo), AGENTSMITH_FAIL_ON (CRITICAL|HIGH)
+
+repos:
+  - repo: local
+    hooks:
+      - id: agentsmith-static
+        name: Agent Smith static scan
+        entry: bash -c 'AGENTSMITH_PATH="${AGENTSMITH_PATH:-../agentsmith}" bash "$AGENTSMITH_PATH/examples/pre-commit-hook.sh" .'
+        language: system
+        pass_filenames: false

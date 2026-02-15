@@ -108,7 +108,7 @@ class Orchestrator:
         else:
             rules_dir = Path(__file__).parent / "rules"
             if rules_dir.is_dir():
-                rule_files = sorted(rules_dir.glob("*.json"))
+                rule_files = self._get_tech_stack_aware_rules(rules_dir)
                 if rule_files:
                     self.static_rules = ",".join(str(f) for f in rule_files)
                 else:
@@ -170,6 +170,20 @@ class Orchestrator:
 
         self.prompt_templates = self._load_prompt_templates()
         self.client = self._ai_provider_factory()
+
+    def _get_tech_stack_aware_rules(self, rules_dir: Path) -> List[Path]:
+        """Load rules with tech-stack awareness: add framework-specific rules only when detected."""
+        all_files = sorted(rules_dir.glob("*.json"))
+        has_node = (self.repo_path / "package.json").exists() or bool(list(self.repo_path.rglob("package.json")))
+        has_python = bool(list(self.repo_path.rglob("requirements.txt")))
+        rule_files = []
+        for f in all_files:
+            if f.name == "rules_node.json" and not has_node:
+                continue
+            if f.name == "rules_python.json" and not has_python:
+                continue
+            rule_files.append(f)
+        return rule_files
 
     def _build_app_context(self) -> Dict[str, any]:
         """Build application context for smarter analysis."""

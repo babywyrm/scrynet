@@ -76,6 +76,21 @@ def _validate_severity(severity: str | None) -> str | None:
     return severity
 
 
+def _get_tech_stack_aware_rules(rules_dir: Path, repo_path: Path) -> list[Path]:
+    """Load rules with tech-stack awareness: add framework-specific rules only when detected."""
+    all_files = sorted(rules_dir.glob("*.json"))
+    has_node = (repo_path / "package.json").exists() or bool(list(repo_path.rglob("package.json")))
+    has_python = bool(list(repo_path.rglob("requirements.txt")))
+    rule_files = []
+    for f in all_files:
+        if f.name == "rules_node.json" and not has_node:
+            continue
+        if f.name == "rules_python.json" and not has_python:
+            continue
+        rule_files.append(f)
+    return rule_files
+
+
 def _find_output_dir(output_dir: str | None = None, prefer_has: str | None = None) -> Path:
     """Find the output directory, defaulting to the most recent one.
     If prefer_has is 'payloads' or 'annotations', pick the most recent dir that has that subdir with content.
@@ -486,7 +501,7 @@ async def handle_scan_static(arguments: dict[str, Any]) -> str:
     if severity:
         cmd.extend(["--severity", severity])
 
-    rule_files = sorted(RULES_DIR.glob("*.json")) if RULES_DIR.is_dir() else []
+    rule_files = _get_tech_stack_aware_rules(RULES_DIR, repo_path) if RULES_DIR.is_dir() else []
     if rule_files:
         cmd.extend(["--rules", ",".join(str(f) for f in rule_files)])
 
@@ -854,7 +869,7 @@ async def handle_scan_file(arguments: dict[str, Any]) -> str:
     if severity:
         cmd.extend(["--severity", severity])
 
-    rule_files = sorted(RULES_DIR.glob("*.json")) if RULES_DIR.is_dir() else []
+    rule_files = _get_tech_stack_aware_rules(RULES_DIR, file_path.parent) if RULES_DIR.is_dir() else []
     if rule_files:
         cmd.extend(["--rules", ",".join(str(f) for f in rule_files)])
 

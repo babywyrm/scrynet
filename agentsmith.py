@@ -12,6 +12,7 @@ A unified command-line interface for all Agent Smith scanning modes:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -81,16 +82,23 @@ def main():
 
   JSON Output for Automation:
     python3 agentsmith.py static ./myapp ./scanner --output json > results.json
+
+  CI Gate (exit 1 on HIGH+ findings):
+    python3 agentsmith.py static ./myapp ./scanner --fail-on HIGH
         """
     )
     static_parser.add_argument('repo_path', help='Path to repository to scan')
     static_parser.add_argument('scanner_bin', help='Path to scanner binary', nargs='?', default='./scanner')
     static_parser.add_argument('--rules', help='Comma-separated rule files')
     static_parser.add_argument('--severity', choices=['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'], help='Minimum severity')
-    static_parser.add_argument('--output', choices=['text', 'json', 'markdown'], default='text', help='Output format')
+    static_parser.add_argument('--output', choices=['text', 'json', 'markdown', 'sarif'], default='text', help='Output format')
+    static_parser.add_argument('--output-file', help='Output file path (for sarif; default: findings.sarif)')
     static_parser.add_argument('--verbose', action='store_true', help='Show remediation advice')
     static_parser.add_argument('--git-diff', action='store_true', help='Scan only changed files')
     static_parser.add_argument('--ignore', help='Comma-separated glob patterns to ignore')
+    static_parser.add_argument('--ignore-rules', help='Comma-separated rule names to suppress (or rule:Name in .scannerignore)')
+    static_parser.add_argument('--fail-on', choices=['CRITICAL', 'HIGH'],
+        help='Exit 1 if any findings at or above this severity (for CI gates)')
     
     # Analyze mode (smart analyzer)
     analyze_parser = subparsers.add_parser(
@@ -285,20 +293,36 @@ def main():
     if args.mode == 'static':
         # Run Go scanner directly
         import subprocess
-        cmd = [args.scanner_bin, '--dir', args.repo_path, '--output', args.output]
+        output_format = args.output
+        if output_format == 'sarif':
+            output_format = 'json'  # Scanner outputs JSON; we convert to SARIF
+        cmd = [args.scanner_bin, '--dir', args.repo_path, '--output', output_format]
         if args.rules:
             cmd.extend(['--rules', args.rules])
         if args.severity:
             cmd.extend(['--severity', args.severity])
+        if getattr(args, 'fail_on', None) in ('HIGH', 'CRITICAL'):
+            cmd.append('--exit-high')
         if args.verbose:
             cmd.append('--verbose')
         if args.git_diff:
             cmd.append('--git-diff')
         if args.ignore:
             cmd.extend(['--ignore', args.ignore])
+        if getattr(args, 'ignore_rules', None):
+            cmd.extend(['--ignore-rules', args.ignore_rules])
         
         try:
-            subprocess.run(cmd, check=True)
+            if args.output == 'sarif':
+                result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                findings = json.loads(result.stdout)
+                from lib.sarif_exporter import findings_to_sarif, write_sarif
+                out_path = args.output_file or 'findings.sarif'
+                sarif = findings_to_sarif(findings, repo_root=args.repo_path)
+                write_sarif(sarif, out_path)
+                print(f"SARIF report written to {out_path}", file=sys.stderr)
+            else:
+                subprocess.run(cmd, check=True)
         except subprocess.CalledProcessError as e:
             sys.exit(e.returncode)
         except FileNotFoundError:

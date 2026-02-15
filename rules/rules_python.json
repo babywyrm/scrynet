@@ -1,0 +1,18 @@
+[
+  {
+    "name": "Python pickle.loads",
+    "pattern": "(?i)pickle\\.loads\\s*\\(",
+    "severity": "CRITICAL",
+    "category": "A03",
+    "description": "pickle.loads with untrusted data - arbitrary code execution",
+    "remediation": "Use JSON or other safe serialization; never unpickle untrusted data."
+  },
+  {
+    "name": "Python yaml.load unsafe",
+    "pattern": "(?i)yaml\\.load\\s*\\(",
+    "severity": "HIGH",
+    "category": "A03",
+    "description": "yaml.load() without Loader - deserialization RCE",
+    "remediation": "Use yaml.safe_load() or yaml.load(..., Loader=yaml.SafeLoader)."
+  }
+]

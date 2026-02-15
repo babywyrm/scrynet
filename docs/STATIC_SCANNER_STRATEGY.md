@@ -1,5 +1,7 @@
 # Static Scanner Strategy — Prioritization Engine
 
+**Status:** Phase 1 (static → prioritization) and Phase 2 (Node/Mongoose rules) ✓ Done. Tech-stack-aware rules (`rules_node.json`, `rules_python.json`) added. See [STRETCH_GOALS.md](STRETCH_GOALS.md) for current roadmap.
+
 ## Your Logic (Validated)
 
 > "The static scanner gives us the ability to prioritize on the weak points before we spend costly cycles with Claude or Bedrock to pinpoint the same flaws."

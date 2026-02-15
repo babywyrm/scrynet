@@ -4,6 +4,7 @@ Index of documentation in this directory.
 
 | Document | Purpose |
 |----------|---------|
+| [../examples/README.md](../examples/README.md) | CI gate, pre-commit hook examples |
 | [USE_CASES.md](USE_CASES.md) | Practical examples: simple to complex workflows (static, CTF, hybrid, compliance) |
 | [ADVANCED_EXAMPLES.md](ADVANCED_EXAMPLES.md) | Multi-profile scans, deduplication, advanced orchestrator workflows |
 | [PROFILES.md](PROFILES.md) | AI profile guide: owasp, ctf, soc2, compliance, code_review, etc. |
@@ -14,6 +15,7 @@ Index of documentation in this directory.
 | [CHANGELOG.md](CHANGELOG.md) | Release history and changes |
 | [STATIC_SCANNER_STRATEGY.md](STATIC_SCANNER_STRATEGY.md) | Static scanner as prioritization engine, improvement roadmap |
 | [../rules/CHANGELOG.md](../rules/CHANGELOG.md) | Rules changelog — additions and changes |
+| [STRETCH_GOALS.md](STRETCH_GOALS.md) | Stretch goals and holistic improvement roadmap |
 
 ## Quick Links
 

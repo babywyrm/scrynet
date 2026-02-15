@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- **Tech-stack-aware rules**: `rules_node.json` and `rules_python.json` loaded when `package.json` or `requirements.txt` detected (child_process, vm, pickle, yaml patterns)
+- **Attack chain profiling** (design): Documented in STRETCH_GOALS as advanced opt-in feature; AI-driven synthesis of findings + taint flows into multi-step attack paths
+- **SARIF export**: `agentsmith.py static --output sarif` for IDE/Code Scanning integration
+- **Pre-commit example**: `examples/pre-commit-hook.sh` and `examples/.pre-commit-config.yaml` — scan before commit, fail on CRITICAL
+- **examples/README.md**: Documents CI gate and pre-commit examples
+- **Rules validation in CI**: `examples/ci-gate.yml` now runs `validate_rules.py` before scan
 - **MCP preset** (`--preset mcp`): 2 files, no payloads/annotations, ~1 min — for MCP shell and Cursor integration
 - **MCP shell docs**: Tail log (`tail -f .mcp_server.log`), debug mode, `scan_mcp` from interactive shell
 - **docs/README.md**: Index of all documentation
@@ -21,6 +27,10 @@ All notable changes to this project will be documented in this file.
 - **rules/CHANGELOG.md**: Rules changelog for rule additions and changes
 - **Modern framework rules**: Prisma unsafe raw SQL, React dangerouslySetInnerHTML, Go fmt.Sprintf in SQL, Ruby ActiveRecord raw SQL; Java (Spring/Quarkus), Python (Django/FastAPI/SQLAlchemy) framework rules
 - **Scanner extensions**: Now scans `.ts`, `.tsx`, `.rb`, `.yml`, `.yaml`
+- **docs/STRETCH_GOALS.md**: Holistic improvement roadmap (consolidated from MCP + Static Strategy)
+- **CTF prioritization + static findings**: `CTFPromptFactory.prioritization()` now accepts `static_findings`
+- **CI exit codes**: `agentsmith.py static --fail-on HIGH` exits 1 on HIGH/CRITICAL findings; Go scanner fixed to exit on both
+- **examples/ci-gate.yml**: GitHub Actions workflow for static scan with `--fail-on HIGH`
 
 ### Changed
 

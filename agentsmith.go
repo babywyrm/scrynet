@@ -177,13 +177,14 @@ func getGitChangedFiles(ctx context.Context) ([]string, error) {
 	return strings.Split(strings.TrimSpace(out), "\n"), nil
 }
 
-// loadIgnorePatterns reads ignore patterns from a flag and the .scannerignore file.
-func loadIgnorePatterns(ignoreFlag string) ([]string, error) {
+// loadIgnorePatterns reads ignore patterns from a flag and the .scannerignore file in scanDir.
+func loadIgnorePatterns(ignoreFlag, scanDir string) ([]string, error) {
 	var pats []string
 	if ignoreFlag != "" {
 		pats = append(pats, strings.Split(ignoreFlag, ",")...)
 	}
-	f, err := os.Open(".scannerignore")
+	ignorePath := filepath.Join(scanDir, ".scannerignore")
+	f, err := os.Open(ignorePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return pats, nil
@@ -194,11 +195,39 @@ func loadIgnorePatterns(ignoreFlag string) ([]string, error) {
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
 		l := strings.TrimSpace(sc.Text())
-		if l != "" && !strings.HasPrefix(l, "#") {
+		if l != "" && !strings.HasPrefix(l, "#") && !strings.HasPrefix(l, "rule:") {
 			pats = append(pats, l)
 		}
 	}
 	return pats, sc.Err()
+}
+
+// loadIgnoreRules returns rule names to suppress (false positives).
+// Reads from .scannerignore lines starting with "rule:" and from ignoreRulesFlag.
+func loadIgnoreRules(ignoreRulesFlag, scanDir string) (map[string]bool, error) {
+	ignored := make(map[string]bool)
+	if ignoreRulesFlag != "" {
+		for _, r := range strings.Split(ignoreRulesFlag, ",") {
+			ignored[strings.TrimSpace(r)] = true
+		}
+	}
+	ignorePath := filepath.Join(scanDir, ".scannerignore")
+	f, err := os.Open(ignorePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return ignored, nil
+		}
+		return nil, err
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		l := strings.TrimSpace(sc.Text())
+		if strings.HasPrefix(l, "rule:") {
+			ignored[strings.TrimSpace(l[5:])] = true
+		}
+	}
+	return ignored, sc.Err()
 }
 
 // shouldIgnore checks if a given file path matches any of the ignore patterns.
@@ -391,7 +420,8 @@ func main() {
 	debug := flag.Bool("debug", false, "Debug mode")
 	useGit := flag.Bool("git-diff", false, "Scan changed files only")
 	exitHigh := flag.Bool("exit-high", false, "Exit 1 if any HIGH findings")
-	ignoreFlag := flag.String("ignore", "vendor,node_modules,dist,public,build", "Ignore patterns")
+	ignoreFlag := flag.String("ignore", "vendor,node_modules,dist,public,build", "Ignore patterns (file paths)")
+	ignoreRulesFlag := flag.String("ignore-rules", os.Getenv("AGENTSMITH_IGNORE_RULES"), "Comma-separated rule names to suppress (or rule:Name in .scannerignore)")
 	postToGitHub := flag.Bool("github-pr", false, "Post results to GitHub PR")
 	verbose := flag.Bool("verbose", false, "Show short remediation advice")
 	ruleFiles := flag.String("rules", "", "Comma-separated paths to external rules.json files (overrides built-in)")
@@ -447,10 +477,14 @@ func main() {
 		}
 	}
 
-	// 3. Load ignore patterns.
-	ignorePatterns, err := loadIgnorePatterns(*ignoreFlag)
+	// 3. Load ignore patterns and rule suppressions.
+	ignorePatterns, err := loadIgnorePatterns(*ignoreFlag, *dir)
 	if err != nil {
 		log.Fatalf("Failed loading ignore patterns: %v", err)
+	}
+	ignoreRules, err := loadIgnoreRules(*ignoreRulesFlag, *dir)
+	if err != nil {
+		log.Fatalf("Failed loading ignore rules: %v", err)
 	}
 
 	// 4. Execute the scan.
@@ -458,7 +492,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("Scan error: %v", err)
 	}
-	findings := filterBySeverity(allFindings, *minSeverity)
+	// Filter by suppressed rules
+	var filtered []Finding
+	for _, f := range allFindings {
+		if !ignoreRules[f.RuleName] {
+			filtered = append(filtered, f)
+		}
+	}
+	findings := filterBySeverity(filtered, *minSeverity)
 
 	// 5. Sort findings for consistent output.
 	sort.Slice(findings, func(i, j int) bool {
@@ -520,10 +561,10 @@ func main() {
 		log.Fatalf("Unsupported output: %s", *output)
 	}
 
-	// 8. Exit with an error code if critical findings are found (for CI/CD).
+	// 8. Exit with an error code if HIGH or CRITICAL findings (for CI/CD).
 	if *exitHigh {
 		for _, f := range findings {
-			if f.Severity == "HIGH" {
+			if f.Severity == "HIGH" || f.Severity == "CRITICAL" {
 				os.Exit(1)
 			}
 		}
