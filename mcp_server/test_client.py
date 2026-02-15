@@ -765,43 +765,63 @@ def _print_result_detail(tool_name: str, data: dict, *, verbose: bool = False):
         sec_files = data.get("security_critical_files", data.get("security_files", []))
         risks = data.get("framework_specific_risks", data.get("risks", []))
 
+        cap_fw = 50 if verbose else 8
+        cap_ep = 50 if verbose else 5
+        cap_sec = 50 if verbose else 5
+        cap_risk = 50 if verbose else 4
+
         print(f"    {c('Languages:', BOLD)}  {', '.join(langs)}")
 
         if isinstance(fws, dict):
             fw_items = sorted(fws.items(), key=lambda x: x[1], reverse=True)
-            confirmed = [(n, s) for n, s in fw_items if s >= 0.8]
-            possible = [(n, s) for n, s in fw_items if s < 0.8]
-
-            if confirmed:
-                print(f"    {c('Confirmed:', BOLD)}")
-                for name, conf in confirmed[:6]:
+            print(f"    {c('Frameworks:', BOLD)}")
+            if fw_items:
+                for name, conf in fw_items[:cap_fw]:
                     bar_len = int(conf * 20)
                     bar = c("█" * bar_len, GREEN) + c("░" * (20 - bar_len), DIM)
                     print(f"      {name:>15} {bar} {int(conf * 100)}%")
-            if possible:
-                names = ", ".join(n for n, _ in possible[:8])
-                print(f"    {c('Possible:', DIM)}   {names}")
+                if len(fw_items) > cap_fw:
+                    print(f"      {c(f'... and {len(fw_items) - cap_fw} more', DIM)}")
+            else:
+                print(f"      {c('(none)', DIM)}")
         elif isinstance(fws, list):
-            print(f"    {c('Frameworks:', BOLD)} {', '.join(str(f) for f in fws[:6])}")
+            print(f"    {c('Frameworks:', BOLD)} {', '.join(str(f) for f in fws[:cap_fw])}")
 
+        print(f"    {c('Entry points:', BOLD)} ({len(entries)})")
         if entries:
-            print(f"    {c('Entry points:', BOLD)} ({len(entries)})")
-            for ep in entries[:5]:
+            for ep in entries[:cap_ep]:
                 ep_name = ep if isinstance(ep, str) else ep.get("file", str(ep))
                 print(f"      {c('>', CYAN)} {Path(ep_name).name}")
-            if len(entries) > 5:
-                print(f"      {c(f'... and {len(entries) - 5} more', DIM)}")
+            if len(entries) > cap_ep:
+                print(f"      {c(f'... and {len(entries) - cap_ep} more', DIM)}")
+        else:
+            print(f"      {c('(none)', DIM)}")
 
+        print(f"    {c('Security files:', BOLD)} ({len(sec_files)})")
         if sec_files:
-            print(f"    {c('Security files:', BOLD)} ({len(sec_files)})")
-            for sf in sec_files[:5]:
+            for sf in sec_files[:cap_sec]:
                 sf_name = sf if isinstance(sf, str) else sf.get("file", str(sf))
                 print(f"      {c('!', YELLOW)} {Path(sf_name).name}")
+            if len(sec_files) > cap_sec:
+                print(f"      {c(f'... and {len(sec_files) - cap_sec} more', DIM)}")
+        else:
+            print(f"      {c('(none)', DIM)}")
 
+        print(f"    {c('Risks:', BOLD)} ({len(risks)})")
         if risks:
-            print(f"    {c('Risks:', BOLD)} ({len(risks)})")
-            for r in risks[:4]:
+            for r in risks[:cap_risk]:
                 print(f"      {c('⚠', YELLOW)} {r}")
+            if len(risks) > cap_risk:
+                print(f"      {c(f'... and {len(risks) - cap_risk} more', DIM)}")
+        else:
+            print(f"      {c('(none)', DIM)}")
+
+        truncated = (
+            (isinstance(fws, dict) and len(fws) > cap_fw) or
+            len(entries) > cap_ep or len(sec_files) > cap_sec or len(risks) > cap_risk
+        )
+        if not verbose and truncated:
+            print(f"    {c('(use verbose to show all)', DIM)}")
 
     elif tool_name == "scan_static":
         count = data.get("count", 0)
