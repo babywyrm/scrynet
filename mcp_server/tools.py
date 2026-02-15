@@ -660,9 +660,10 @@ async def handle_scan_hybrid(arguments: dict[str, Any]) -> str:
         cap = 32_000 if arguments.get("verbose") else 4_000
         debug_log = combined[-cap:] if len(combined) > cap else combined
 
-    # Find the output directory (most recent)
+    # Use output dir for the repo we just scanned (orchestrator writes to output/sanitized_repo)
+    sanitized = str(repo_path).strip("/").replace("/", "_").replace("\\", "_")
+    out_dir = OUTPUT_DIR / sanitized
     try:
-        out_dir = _find_output_dir()
         combined = out_dir / "combined_findings.json"
         if combined.is_file():
             findings = json.loads(combined.read_text())
@@ -690,6 +691,7 @@ async def handle_scan_hybrid(arguments: dict[str, Any]) -> str:
 
     fallback = {
         "status": "completed",
+        "output_dir": str(out_dir),
         "message": "Scan finished. Check output/ directory for results.",
     }
     if debug_log is not None:
