@@ -4,8 +4,9 @@ Index of documentation in this directory.
 
 | Document | Purpose |
 |----------|---------|
+| [../QUICKSTART.md](../QUICKSTART.md) | Copy-paste commands for top 12 use cases (CLI + MCP shell) |
 | [../examples/README.md](../examples/README.md) | CI gate, pre-commit hook examples |
-| [USE_CASES.md](USE_CASES.md) | Practical examples: simple to complex workflows (static, CTF, hybrid, compliance) |
+| [USE_CASES.md](USE_CASES.md) | Detailed workflows: simple to complex (static, CTF, hybrid, compliance) — verbose companion to QUICKSTART |
 | [ADVANCED_EXAMPLES.md](ADVANCED_EXAMPLES.md) | Multi-profile scans, deduplication, advanced orchestrator workflows |
 | [PROFILES.md](PROFILES.md) | AI profile guide: owasp, ctf, soc2, compliance, code_review, etc. |
 | [MCP_SCANNING.md](MCP_SCANNING.md) | `scan_mcp` tool: security-scan MCP servers, DVMCP walkthrough, heuristics |

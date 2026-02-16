@@ -10,6 +10,8 @@
 
 **Agent Smith** is a comprehensive, multi-mode security scanning tool that combines fast static analysis with AI-powered contextual analysis. It supports multiple scanning modes optimized for different use cases, from quick CI/CD checks to deep security audits.
 
+**→ [QUICKSTART.md](QUICKSTART.md)** — Copy-paste commands for the top 12 use cases (CLI + MCP shell).
+
 ## What's New
 
 - **AI Prioritization**: Automatically selects top N most relevant files (saves time & API costs)
@@ -698,6 +700,8 @@ git status --porcelain | grep -E "(output|report|findings)" || echo "No output f
 ```
 
 ## Quick Start
+
+See **[QUICKSTART.md](QUICKSTART.md)** for copy-paste commands. TL;DR:
 
 **Fast static scan (no API key needed):**
 ```bash

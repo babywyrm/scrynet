@@ -2,6 +2,8 @@
 
 Model Context Protocol (MCP) server that exposes Agent Smith's security scanning and AI analysis tools over HTTP. Supports both **SSE** and **Streamable HTTP** transports.
 
+**→ [../QUICKSTART.md](../QUICKSTART.md)** — MCP shell commands (use cases 9–12) alongside CLI.
+
 ## Quick Start
 
 **Recommended:** One-command setup + server + interactive client:

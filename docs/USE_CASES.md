@@ -1,6 +1,6 @@
 # Agent Smith Use Cases - Simple to Complex
 
-Practical examples for common security analysis scenarios.
+Detailed workflows for common security analysis scenarios. For copy-paste commands, see **[../QUICKSTART.md](../QUICKSTART.md)**.
 
 **See also:** [examples/README.md](../examples/README.md) (CI, pre-commit) · [ADVANCED_EXAMPLES.md](ADVANCED_EXAMPLES.md) (multi-profile, deduplication) · [MCP_SCANNING.md](MCP_SCANNING.md) (scan MCP servers) · [PROFILES.md](PROFILES.md) (AI profiles)
 
