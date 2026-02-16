@@ -389,12 +389,10 @@ agentsmith/
 ├── smart_analyzer.py          # AI-powered multi-stage analyzer
 ├── ctf_analyzer.py            # CTF-focused analyzer
 ├── summarize.py               # Scan results summarizer
-├── scrynet.py                 # Network-aware scanner entry point
 │
 ├── agentsmith.go              # Go scanner source code
 ├── rules.go                   # Master rule definitions (Go)
 ├── gen_rule_json.go           # Rule JSON generator
-├── scrynet.go                 # Network scanner (Go)
 ├── go.mod / go.sum            # Go module files
 ├── scanner                    # Go scanner binary (built by scripts/setup.sh)
 │

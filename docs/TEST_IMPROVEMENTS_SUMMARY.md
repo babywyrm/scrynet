@@ -2,7 +2,7 @@
 
 **Date**: February 5, 2026
 **Status**: ✅ Complete - All tests passing!
-**Note**: Historical document. Current test count: **224**. See [tests/README.md](README.md) for current status.
+**Note**: Historical document. Current test count: **224**. See [tests/README.md](../tests/README.md) for current status.
 
 ## Overview
 

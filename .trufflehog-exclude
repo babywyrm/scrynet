@@ -1,8 +1,9 @@
 # TruffleHog path exclusions (regex, one per line)
-# Excludes: deps, output, test_targets (intentionally vulnerable apps)
+# Excludes: deps, output, test_targets (intentionally vulnerable apps), scanner binary
 ^\.venv/
 output/
 test_targets/
+^scanner$
 \.git/
 __pycache__/
 \.pyc$

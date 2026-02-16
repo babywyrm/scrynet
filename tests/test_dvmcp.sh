@@ -3,9 +3,9 @@
 # Agent Smith — DVMCP (Damn Vulnerable MCP) Test Suite
 #
 # Launches the DVMCP challenge servers, scans each one with scan_mcp,
-# and reports findings. Requires:
-#   - Agent Smith MCP server running on port 2266
-#   - DVMCP cloned at tests/test_targets/DVMCP
+# and reports findings. Auto-starts the Agent Smith MCP server if not running.
+#
+# Requires: DVMCP cloned at tests/test_targets/DVMCP
 #
 # Usage:
 #   ./tests/test_dvmcp.sh              # scan all 10 challenges
@@ -20,7 +20,11 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DVMCP_DIR="$PROJECT_ROOT/tests/test_targets/DVMCP"
 VENV_PYTHON="$PROJECT_ROOT/.venv/bin/python"
-AGENTSMITH_URL="${AGENTSMITH_URL:-http://localhost:2266/sse}"
+AGENTSMITH_PORT="${AGENTSMITH_MCP_PORT:-2266}"
+AGENTSMITH_URL="${AGENTSMITH_URL:-http://localhost:${AGENTSMITH_PORT}/sse}"
+HEALTH_URL="http://127.0.0.1:${AGENTSMITH_PORT}/health"
+MCP_LOG="$PROJECT_ROOT/.mcp_server.log"
+SERVER_PID=""
 
 # Colors
 BOLD="\033[1m"
@@ -78,6 +82,27 @@ ok()   { echo -e "  ${GREEN}✓${RESET} $*"; }
 warn() { echo -e "  ${YELLOW}!${RESET} $*"; }
 err()  { echo -e "  ${RED}✗${RESET} $*"; }
 
+ensure_mcp_server() {
+    # Start MCP server if not already running
+    if curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" 2>/dev/null | grep -q 200; then
+        ok "Agent Smith MCP server is healthy"
+        return
+    fi
+    log "Starting Agent Smith MCP server on port ${AGENTSMITH_PORT}..."
+    cd "$PROJECT_ROOT"
+    "$VENV_PYTHON" -m mcp_server --no-auth --port "$AGENTSMITH_PORT" >> "$MCP_LOG" 2>&1 &
+    SERVER_PID=$!
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+        if curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" 2>/dev/null | grep -q 200; then
+            ok "Agent Smith MCP server is healthy"
+            return
+        fi
+        sleep 1
+    done
+    err "Server did not become ready. Check $MCP_LOG"
+    exit 1
+}
+
 check_prereqs() {
     if [ ! -d "$DVMCP_DIR" ]; then
         err "DVMCP not found at $DVMCP_DIR"
@@ -90,15 +115,7 @@ check_prereqs() {
         exit 1
     fi
 
-    # Check Agent Smith MCP server is running
-    local health_url
-    health_url="${AGENTSMITH_URL%/sse}/health"
-    if ! curl -s "$health_url" >/dev/null 2>&1; then
-        err "Agent Smith MCP server not reachable at $health_url"
-        log "Start it with: python3 -m mcp_server --no-auth"
-        exit 1
-    fi
-    ok "Agent Smith MCP server is healthy"
+    ensure_mcp_server
 }
 
 setup_dvmcp_dirs() {
@@ -267,7 +284,17 @@ if len(findings) > 5:
 # ============================================================================
 
 DVMCP_PIDS=""
+
+cleanup_mcp() {
+    if [ -n "$SERVER_PID" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
+        log "Stopping Agent Smith MCP server (pid $SERVER_PID)..."
+        kill "$SERVER_PID" 2>/dev/null || true
+        wait "$SERVER_PID" 2>/dev/null || true
+    fi
+}
+
 trap kill_dvmcp EXIT
+trap cleanup_mcp EXIT
 
 # Parse args
 CHALLENGES=""

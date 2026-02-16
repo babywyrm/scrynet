@@ -17,6 +17,7 @@ Index of documentation in this directory.
 | [STATIC_SCANNER_STRATEGY.md](STATIC_SCANNER_STRATEGY.md) | Static scanner as prioritization engine, improvement roadmap |
 | [../rules/CHANGELOG.md](../rules/CHANGELOG.md) | Rules changelog — additions and changes |
 | [STRETCH_GOALS.md](STRETCH_GOALS.md) | Stretch goals and holistic improvement roadmap |
+| [TEST_IMPROVEMENTS_SUMMARY.md](TEST_IMPROVEMENTS_SUMMARY.md) | Historical: test suite overhaul (Feb 2026) |
 
 ## Quick Links
 

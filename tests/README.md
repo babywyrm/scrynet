@@ -97,14 +97,15 @@ See [mcp_server/README.md](../mcp_server/README.md) and [docs/MCP_SCANNING.md](.
 
 ## Shell Scripts
 
-Located in `scripts/`:
+**Project scripts** (`scripts/`):
 - `run_mcp_tests.sh` - Start MCP server (if needed) and run test suite
 - `run_mcp_shell.sh` - One-command setup + MCP server + interactive client
-- `test_dvwa.sh` - Test DVWA scan
-- `test_juice_shop.sh` - Test juice-shop scan
+
+**Integration test scripts** (`tests/scripts/`):
 - `test_advanced.sh` - Advanced feature tests
 - `test_complex.sh` - Complex multi-profile tests
 - `test_all_profiles.sh` - Test all profiles
+- `test_juice_shop.sh` - Test juice-shop scan
 
 Run with:
 ```bash
