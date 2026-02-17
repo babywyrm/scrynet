@@ -1527,7 +1527,18 @@ async def mode_interact(url: str, repo_path: str | None = None):
                     args["repo_path"] = repo_path
                     print(f"  {c('(using default repo_path)', DIM)}")
             else:
-                args = _prompt_for_args(tool, repo_path)
+                # scan_mcp with no args: default to DVMCP on 9001 if reachable
+                if tool_name == "scan_mcp":
+                    default_url = "http://localhost:9001/sse"
+                    try:
+                        import urllib.request
+                        urllib.request.urlopen(default_url.replace("/sse", "/"), timeout=2)
+                        args = {"target_url": default_url}
+                        print(f"  {c('(DVMCP default)', DIM)} → {default_url}")
+                    except Exception:
+                        args = _prompt_for_args(tool, repo_path)
+                else:
+                    args = _prompt_for_args(tool, repo_path)
 
             print(f"  {c('Calling', DIM)}: {tool_name}")
             spinner.start(f"Running {tool_name}...")

@@ -216,7 +216,7 @@ scan_mcp {"target_url": "http://localhost:9001/sse"}   # DVMCP challenge 1
 scan_mcp {"target_url": "http://localhost:2266/sse"}   # Self-scan (audit your own server)
 ```
 
-Type `scan_mcp` alone to be prompted for the target URL. See [docs/MCP_SCANNING.md](../docs/MCP_SCANNING.md) for the full DVMCP walkthrough and security checks reference.
+Type `scan_mcp` alone — if DVMCP is running on port 9001, it defaults to `http://localhost:9001/sse`; otherwise you'll be prompted for the URL. See [docs/MCP_SCANNING.md](../docs/MCP_SCANNING.md) for the full DVMCP walkthrough and security checks reference.
 
 ### Test Client Environment Variables
 

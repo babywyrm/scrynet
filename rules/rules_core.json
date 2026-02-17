@@ -672,28 +672,20 @@
     "remediation": "Log or handle exceptions appropriately."
   },
   {
-    "name": "Axios SSRF",
-    "pattern": "(?i)axios\\.(get|post|put|delete)\\s*\\(",
+    "name": "Axios SSRF (dynamic URL)",
+    "pattern": "(?i)axios\\.(get|post|put|delete)\\s*\\(\\s*(?!\\s*['\"][^'\"]*https?://[^'\"]*['\"])",
     "severity": "HIGH",
     "category": "A10",
-    "description": "Potential SSRF via axios request",
-    "remediation": "Whitelist/validate external URLs."
+    "description": "Potential SSRF via axios with non-literal URL (variable, template, concatenation)",
+    "remediation": "Whitelist/validate external URLs; avoid user-controlled URLs."
   },
   {
-    "name": "Go SSRF",
-    "pattern": "http\\.Get\\([^)]+\\)",
+    "name": "Go SSRF (dynamic URL)",
+    "pattern": "(?i)http\\.Get\\s*\\(\\s*(?!\\s*['\"][^'\"]*https?://[^'\"]*['\"])",
     "severity": "HIGH",
     "category": "A10",
-    "description": "Unvalidated http.Get",
-    "remediation": "Whitelist URLs/domains."
-  },
-  {
-    "name": "Go net/http Get",
-    "pattern": "(?i)http\\.Get\\(",
-    "severity": "HIGH",
-    "category": "A10",
-    "description": "http.Get()",
-    "remediation": "Whitelist URLs/domains."
+    "description": "Unvalidated http.Get with non-literal URL (variable, concatenation)",
+    "remediation": "Whitelist URLs/domains; avoid user-controlled URLs."
   },
   {
     "name": "Java URL openStream",
@@ -712,12 +704,12 @@
     "remediation": "Whitelist URLs/domains."
   },
   {
-    "name": "Python SSRF",
-    "pattern": "requests\\.get\\([^)]+\\)",
+    "name": "Python SSRF (dynamic URL)",
+    "pattern": "requests\\.get\\s*\\(\\s*(?!\\s*['\"][^'\"]*https?://[^'\"]*['\"])",
     "severity": "HIGH",
     "category": "A10",
-    "description": "Unvalidated requests.get",
-    "remediation": "Whitelist URLs/domains."
+    "description": "Unvalidated requests.get with non-literal URL (variable, concatenation)",
+    "remediation": "Whitelist URLs/domains; avoid user-controlled URLs."
   },
   {
     "name": "Python urllib urlopen",

@@ -4,6 +4,9 @@ Rule additions and changes. See `docs/STATIC_SCANNER_STRATEGY.md` for roadmap. V
 
 ## 2026-02
 
+### Changed
+- **Axios/Go/Python SSRF rules narrowed**: Only flag when URL is non-literal (variable, template, concatenation). Static URLs like `axios.get("https://api.example.com")` no longer flagged — reduces false positives.
+
 ### Added
 - **Prisma Unsafe Raw SQL** (CRITICAL): `$queryRawUnsafe`, `$executeRawUnsafe`, raw SQL with concatenation
 - **React dangerouslySetInnerHTML** (HIGH): XSS when rendering user-controlled HTML

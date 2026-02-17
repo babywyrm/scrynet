@@ -10,6 +10,7 @@
 # Usage:
 #   ./tests/test_dvmcp.sh              # scan all 10 challenges
 #   ./tests/test_dvmcp.sh 1 8 9        # scan specific challenges
+#   ./tests/test_dvmcp.sh --json       # JSON output for CI/regression
 #   ./tests/test_dvmcp.sh --setup-only # just start DVMCP servers
 #   ./tests/test_dvmcp.sh --kill       # just kill DVMCP servers
 # ============================================================================
@@ -180,12 +181,15 @@ scan_challenge() {
     name=$(challenge_name "$num")
     local url="http://localhost:$port/sse"
 
-    echo ""
-    echo -e "${BOLD}━━━ Challenge $num: $name (port $port) ━━━${RESET}"
+    if [ "$JSON_OUTPUT" != "true" ]; then
+        echo ""
+        echo -e "${BOLD}━━━ Challenge $num: $name (port $port) ━━━${RESET}"
+    fi
 
     # Quick check if server is responding
     if ! curl -s "http://localhost:$port/" >/dev/null 2>&1; then
-        err "Server on port $port not responding, skipping"
+        [ "$JSON_OUTPUT" != "true" ] && err "Server on port $port not responding, skipping"
+        echo "${num}|0|?|0|Server not responding" >> "$SCOREBOARD_FILE"
         return 1
     fi
 
@@ -224,7 +228,17 @@ except Exception as e:
 " 2>/dev/null)
 
     if echo "$result" | "$VENV_PYTHON" -c "import sys,json; d=json.load(sys.stdin); sys.exit(0 if 'error' not in d else 1)" 2>/dev/null; then
-        # Parse and display results
+        # Parse and emit scoreboard line
+        echo "$result" | "$VENV_PYTHON" -c "
+import sys, json
+d = json.load(sys.stdin)
+s = d.get('summary', {})
+risk = s.get('risk_score', '?')
+total = s.get('total_findings', 0)
+print(f\"${num}|1|{risk}|{total}|\")
+" 2>/dev/null >> "$SCOREBOARD_FILE"
+        # Display results (unless JSON mode)
+        if [ "$JSON_OUTPUT" != "true" ]; then
         echo "$result" | "$VENV_PYTHON" -c "
 import sys, json
 
@@ -270,11 +284,13 @@ for f in findings[:5]:
 if len(findings) > 5:
     print(f'  \033[2m... and {len(findings) - 5} more\033[0m')
 "
+        fi
         return 0
     else
         local error
         error=$(echo "$result" | "$VENV_PYTHON" -c "import sys,json; print(json.load(sys.stdin).get('error','unknown'))" 2>/dev/null || echo "parse error")
-        err "Scan failed: $error"
+        echo "${num}|0|?|0|$error" >> "$SCOREBOARD_FILE"
+        [ "$JSON_OUTPUT" != "true" ] && err "Scan failed: $error"
         return 1
     fi
 }
@@ -284,6 +300,7 @@ if len(findings) > 5:
 # ============================================================================
 
 DVMCP_PIDS=""
+SCOREBOARD_FILE=""
 
 cleanup_mcp() {
     if [ -n "$SERVER_PID" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
@@ -293,20 +310,21 @@ cleanup_mcp() {
     fi
 }
 
-trap kill_dvmcp EXIT
-trap cleanup_mcp EXIT
+trap 'kill_dvmcp; cleanup_mcp; [ -n "$SCOREBOARD_FILE" ] && rm -f "$SCOREBOARD_FILE"' EXIT
 
 # Parse args
 CHALLENGES=""
 SETUP_ONLY=false
 KILL_ONLY=false
+JSON_OUTPUT=false
 
 for arg in "$@"; do
     case "$arg" in
         --setup-only) SETUP_ONLY=true ;;
         --kill)       KILL_ONLY=true ;;
+        --json)       JSON_OUTPUT=true ;;
         [0-9]*)       CHALLENGES="$CHALLENGES $arg" ;;
-        *)            echo "Usage: $0 [--setup-only|--kill] [challenge_numbers...]"; exit 1 ;;
+        *)            echo "Usage: $0 [--setup-only|--kill|--json] [challenge_numbers...]"; exit 1 ;;
     esac
 done
 
@@ -334,6 +352,12 @@ echo ""
 
 check_prereqs
 
+# When --json, send all non-JSON output to stderr so stdout is clean for CI
+if [ "$JSON_OUTPUT" = "true" ]; then
+    exec 3>&1
+    exec 1>&2
+fi
+
 # Setup DVMCP data directories
 log "Setting up DVMCP test data..."
 setup_dvmcp_dirs
@@ -355,6 +379,9 @@ if $SETUP_ONLY; then
     exit 0
 fi
 
+# Scoreboard temp file (used by scan_challenge)
+SCOREBOARD_FILE=$(mktemp)
+
 # Scan each challenge
 log "Scanning DVMCP challenges..."
 PASSED=0
@@ -368,14 +395,49 @@ for num in $CHALLENGES; do
     fi
 done
 
-# Summary
-echo ""
-echo -e "${BOLD}━━━ Summary ━━━${RESET}"
-echo -e "  Scanned:  $NUM_CHALLENGES challenges"
-echo -e "  Success:  ${GREEN}$PASSED${RESET}"
-if [ "$FAILED" -gt 0 ]; then
-    echo -e "  Failed:   ${RED}$FAILED${RESET}"
+# Scoreboard and summary
+CHALLENGE_NAMES="Basic Prompt Injection|Tool Poisoning|Excessive Permission Scope|Rug Pull Attack|Tool Shadowing|Indirect Prompt Injection|Token Theft|Malicious Code Execution|Remote Access Control|Multi-Vector Attack"
+if [ "$JSON_OUTPUT" = "true" ]; then
+    exec 1>&3
+    "$VENV_PYTHON" -c "
+import json
+names = '$CHALLENGE_NAMES'.split('|')
+challenges = []
+for line in open('$SCOREBOARD_FILE'):
+    parts = line.strip().split('|', 4)
+    if len(parts) < 5:
+        continue
+    num, passed, risk, total, err = int(parts[0]), parts[1] == '1', parts[2], int(parts[3]) if parts[3].isdigit() else 0, parts[4] or None
+    name = names[num - 1] if 1 <= num <= len(names) else f'Challenge {num}'
+    challenges.append({
+        'challenge': num,
+        'name': name,
+        'port': 9000 + num,
+        'passed': passed,
+        'risk_score': risk,
+        'total_findings': total,
+        'error': err
+    })
+print(json.dumps({'challenges': challenges, 'summary': {'passed': $PASSED, 'failed': $FAILED, 'total': $NUM_CHALLENGES}}, indent=2))
+"
+else
+    echo ""
+    echo -e "${BOLD}━━━ Scoreboard ━━━${RESET}"
+    while IFS='|' read -r num passed risk total err; do
+        if [ "$passed" = "1" ]; then
+            echo -e "  Challenge $num: ${GREEN}✓${RESET} (risk=$risk, findings=$total)"
+        else
+            echo -e "  Challenge $num: ${RED}✗${RESET} ${err:-$risk}"
+        fi
+    done < "$SCOREBOARD_FILE"
+    echo ""
+    echo -e "${BOLD}━━━ Summary ━━━${RESET}"
+    echo -e "  Scanned:  $NUM_CHALLENGES challenges"
+    echo -e "  Passed:   ${GREEN}$PASSED${RESET}"
+    if [ "$FAILED" -gt 0 ]; then
+        echo -e "  Failed:   ${RED}$FAILED${RESET}"
+    fi
+    echo ""
 fi
-echo ""
 
 # Cleanup happens via trap
