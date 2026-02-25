@@ -165,7 +165,7 @@ class MCPSession:
             self._client.post(
                 self.post_url,
                 json=payload,
-                headers={"Content-Type": "application/json"},
+                headers=self._headers,
                 timeout=5,
             )
         except Exception:
@@ -179,16 +179,32 @@ class MCPSession:
             pass
 
 
-class HTTPSession:
-    """Plain HTTP POST fallback (no SSE)."""
+def _parse_sse_json(text: str, req_id: int | None = None) -> dict | None:
+    """Extract JSON-RPC response from SSE body (event: message / data: {...})."""
+    for line in text.splitlines():
+        if line.startswith("data:"):
+            data = line[5:].strip()
+            if data:
+                try:
+                    msg = json.loads(data)
+                    if req_id is None or msg.get("id") == req_id:
+                        return msg
+                except json.JSONDecodeError:
+                    pass
+    return None
 
-    def __init__(self, base: str, post_url: str, timeout: float = 25.0):
+
+class HTTPSession:
+    """Plain HTTP POST fallback (no SSE). Handles both application/json and text/event-stream responses."""
+
+    def __init__(self, base: str, post_url: str, timeout: float = 25.0, headers: dict | None = None):
         self.base = base
         self.sse_url = ""
         self.post_url = post_url
         self.timeout = timeout
         self._req_id = 0
         self._stop = threading.Event()
+        self._headers = headers or {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
         self._client = httpx.Client(
             verify=False, timeout=timeout, follow_redirects=True
         )
@@ -209,11 +225,23 @@ class HTTPSession:
                 r = self._client.post(
                     self.post_url,
                     json=_jrpc(method, params, self._req_id),
-                    headers={"Content-Type": "application/json"},
+                    headers=self._headers,
                     timeout=timeout or self.timeout,
                 )
-                if r.status_code == 200:
-                    return r.json()
+                if r.status_code in (200, 202):
+                    ct = r.headers.get("content-type", "")
+                    if "application/json" in ct:
+                        return r.json()
+                    # Streamable HTTP: response in SSE format (event: message / data: {...})
+                    if "text/event-stream" in ct or "jsonrpc" in r.text:
+                        parsed = _parse_sse_json(r.text, self._req_id)
+                        if parsed:
+                            return parsed
+                        # Fallback: try raw JSON
+                        try:
+                            return r.json()
+                        except Exception:
+                            pass
             except Exception:
                 if attempt < retries:
                     time.sleep(0.5)
@@ -274,13 +302,17 @@ def detect_transport(
             seen_post.add(p)
             ordered_post.append(p)
 
+    mcp_headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+    }
     for path in ordered_post:
         post_url = base + path
         try:
             r = client.post(
                 post_url,
                 json=_jrpc("initialize", MCP_INIT_PARAMS),
-                headers={"Content-Type": "application/json"},
+                headers=mcp_headers,
                 timeout=5,
             )
             is_jsonrpc_body = "jsonrpc" in r.text or "JSON-RPC" in r.text
@@ -289,9 +321,14 @@ def detect_transport(
                 or "method" in r.text
                 or "error" in r.text.lower()
             )
-            if (r.status_code == 200 and is_jsonrpc_body) or is_jsonrpc_error:
+            # 200 with JSON or SSE body; 202 Accepted (Streamable HTTP)
+            if (
+                (r.status_code in (200, 202) and is_jsonrpc_body)
+                or (r.status_code == 200 and "text/event-stream" in r.headers.get("content-type", ""))
+                or is_jsonrpc_error
+            ):
                 client.close()
-                return HTTPSession(base, post_url, timeout=connect_timeout)
+                return HTTPSession(base, post_url, timeout=connect_timeout, headers=mcp_headers)
         except Exception:
             pass
 
@@ -302,7 +339,7 @@ def detect_transport(
                 r = client.post(
                     post_url,
                     json=_jrpc("initialize", MCP_INIT_PARAMS),
-                    headers={"Content-Type": "application/json"},
+                    headers=mcp_headers,
                     timeout=4,
                 )
                 if r.status_code in (400, 404, 422):

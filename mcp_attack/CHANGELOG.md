@@ -36,6 +36,7 @@ All notable changes to this submodule are documented here.
 ### Changed
 
 - `parse_args()` now accepts optional `args` for testability
+- **Streamable HTTP support** — Scanner now handles MCP servers using Streamable HTTP (e.g. DeepWiki at `https://mcp.deepwiki.com/mcp`). Accepts `application/json` and `text/event-stream` responses; parses SSE-formatted POST responses.
 
 ---
 

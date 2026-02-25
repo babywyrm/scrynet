@@ -1,6 +1,9 @@
 # Public / demo MCP targets for scanning
 # Run DVMCP locally: ./tests/test_dvmcp.sh --setup-only
-# Then scan with: python -m mcp_attack --public-targets
+# DeepWiki: remote, no-auth (Streamable HTTP at /mcp)
+
+# DeepWiki — remote, no-auth (https://mcpservers.org, docs.devin.ai)
+https://mcp.deepwiki.com/mcp
 
 # DVMCP challenges (localhost)
 http://localhost:9001/sse
