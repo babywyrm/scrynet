@@ -7,6 +7,9 @@ from mcp_attack.patterns.rules import (
     TOKEN_THEFT_PATTERNS,
     CODE_EXEC_PATTERNS,
     RAC_PATTERNS,
+    RATE_LIMIT_PATTERNS,
+    PROMPT_LEAKAGE_PATTERNS,
+    SUPPLY_CHAIN_PATTERNS,
 )
 
 __all__ = [
@@ -16,4 +19,7 @@ __all__ = [
     "TOKEN_THEFT_PATTERNS",
     "CODE_EXEC_PATTERNS",
     "RAC_PATTERNS",
+    "RATE_LIMIT_PATTERNS",
+    "PROMPT_LEAKAGE_PATTERNS",
+    "SUPPLY_CHAIN_PATTERNS",
 ]

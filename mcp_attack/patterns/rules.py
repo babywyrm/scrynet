@@ -99,6 +99,37 @@ CODE_EXEC_PATTERNS = [
     r">(>?)\s*/dev/(null|tcp|udp)",
 ]
 
+RATE_LIMIT_PATTERNS = [
+    r"unlimited\s+(requests?|calls?|invocations?)",
+    r"no\s+(rate\s+)?limit",
+    r"throttle.?free",
+    r"burst\s+allowed",
+    r"unbounded\s+(api|request|call)",
+]
+
+PROMPT_LEAKAGE_PATTERNS = [
+    r"internal\s+prompt",
+    r"system\s+prompt",
+    r"echo\s+(user|input|prompt)",
+    r"log\s+(user|prompt|instruction)",
+    r"store\s+(user|prompt|conversation)",
+    r"leak\s+(prompt|instruction)",
+    r"expose\s+(system|internal)\s+(prompt|instruction)",
+    r"debug\s+mode.*prompt",
+]
+
+SUPPLY_CHAIN_PATTERNS = [
+    r"npm\s+install\s+.*\$\{|npm\s+install\s+.*%s",
+    r"pip\s+install\s+.*\$\{|pip\s+install\s+.*%s",
+    r"curl\s+.*\|\s*(bash|sh|python)",
+    r"wget\s+.*\|\s*(bash|sh|python)",
+    r"eval\s*\(\s*.*(url|fetch|http)",
+    r"install\s+from\s+(url|http|user.?provided)",
+    r"dynamic\s+package\s+install",
+    r"user.?controlled\s+(package|dependency|url)",
+    r"user.?provided\s+(url|package|dependency)",
+]
+
 RAC_PATTERNS = {
     "reverse_shell": (
         r"(nc|ncat|socat|netcat|bash\s+-i|/dev/tcp|reverse.?shell)",

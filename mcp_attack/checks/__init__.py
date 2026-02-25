@@ -27,6 +27,9 @@ from mcp_attack.checks.chaining import (
     check_attack_chains,
 )
 from mcp_attack.checks.transport import check_sse_security
+from mcp_attack.checks.rate_limit import check_rate_limit
+from mcp_attack.checks.prompt_leakage import check_prompt_leakage
+from mcp_attack.checks.supply_chain import check_supply_chain
 
 # All checks that require session (for rug_pull, indirect_injection, protocol_robustness, sse_security)
 SESSION_CHECKS = [
@@ -81,6 +84,9 @@ def run_all_checks(
     check_code_execution(result)
     check_remote_access(result)
     check_schema_risks(result)
+    check_rate_limit(result)
+    check_prompt_leakage(result)
+    check_supply_chain(result)
     check_protocol_robustness(session, result)
     check_multi_vector(result)
     check_attack_chains(result)

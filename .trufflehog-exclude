@@ -1,7 +1,8 @@
 # TruffleHog path exclusions (regex, one per line)
-# Excludes: deps, output, test_targets (intentionally vulnerable apps), scanner binary
+# Excludes: deps, output, test_targets (intentionally vulnerable apps), scanner binary, mcp_attack reports
 ^\.venv/
 output/
+mcp_attack/.*\.json
 test_targets/
 ^scanner$
 \.git/

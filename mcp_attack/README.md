@@ -33,6 +33,12 @@ python3 -m mcp_attack --targets http://localhost:2266
 # DVMCP port range (challenges 1–10)
 python3 mcp_audit.py --port-range localhost:9001-9010 --verbose
 
+# Targets from file (one URL per line)
+python3 mcp_audit.py --targets-file urls.txt
+
+# Built-in public targets (DVMCP localhost)
+python3 mcp_audit.py --public-targets
+
 # JSON report
 python3 mcp_audit.py --port-range localhost:9001-9010 --json report.json
 
@@ -48,12 +54,21 @@ python3 mcp_audit.py --targets http://localhost:2266 --debug
 mcp_attack/
 ├── core/           # Models, session, enumerator, constants
 ├── patterns/       # Regex rules for injection, poisoning, etc.
-├── checks/         # Security checks (injection, theft, execution, …)
+├── checks/         # Security checks (injection, theft, execution, rate_limit, prompt_leakage, supply_chain, …)
+├── data/           # Built-in public_targets.txt
 ├── k8s/            # Kubernetes internal checks (optional)
 ├── reporting/      # Console + JSON output
+├── tests/          # Pytest suite
 ├── scanner.py      # Orchestration
 ├── cli.py          # Argument parsing
 └── __main__.py     # Entry point
+```
+
+## Tests
+
+```bash
+# From project root
+python -m pytest mcp_attack/tests/ -v
 ```
 
 ## Testing with DVMCP
