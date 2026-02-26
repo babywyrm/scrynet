@@ -88,11 +88,23 @@ class UniversalTechDetector:
         'redis': {'keywords': ['redis', 'redis-py'], 'type': 'database', 'lang': 'any'},
         'sqlite': {'keywords': ['sqlite', 'sqlite3'], 'type': 'database', 'lang': 'any'},
         
+        # C/C++ Frameworks and Build Systems
+        'cmake': {'keywords': ['cmake_minimum_required', 'add_executable', 'find_package'], 'type': 'build_system', 'lang': 'C++'},
+        'conan': {'keywords': ['conan', 'conans', 'ConanFile', 'conan_basic_setup'], 'type': 'package_manager', 'lang': 'C++'},
+        'vcpkg': {'keywords': ['vcpkg', 'vcpkg.json'], 'type': 'package_manager', 'lang': 'C++'},
+        'boost': {'keywords': ['boost/', 'boost::', '#include <boost/'], 'type': 'library', 'lang': 'C++'},
+        'qt': {'keywords': ['QApplication', 'QWidget', 'Q_OBJECT', 'qt5', 'qt6'], 'type': 'framework', 'lang': 'C++'},
+        'poco': {'keywords': ['Poco/', 'Poco::', 'poco-foundation'], 'type': 'library', 'lang': 'C++'},
+        'grpc_cpp': {'keywords': ['grpc++', 'grpc::Server', 'grpc/grpc.h'], 'type': 'api', 'lang': 'C++'},
+        'openssl_cpp': {'keywords': ['openssl', 'SSL_CTX', 'EVP_', 'openssl/ssl.h'], 'type': 'crypto', 'lang': 'C++'},
+
         # Testing Frameworks
         'pytest': {'keywords': ['pytest', 'import pytest'], 'type': 'testing', 'lang': 'Python'},
         'jest': {'keywords': ['jest', 'describe(', 'it('], 'type': 'testing', 'lang': 'JavaScript'},
         'mocha': {'keywords': ['mocha', 'describe(', 'it('], 'type': 'testing', 'lang': 'JavaScript'},
         'junit': {'keywords': ['junit', '@Test', 'org.junit'], 'type': 'testing', 'lang': 'Java'},
+        'gtest': {'keywords': ['gtest', 'TEST_F(', 'TEST(', 'EXPECT_'], 'type': 'testing', 'lang': 'C++'},
+        'catch2': {'keywords': ['catch2', 'CATCH_', 'TEST_CASE(', 'REQUIRE('], 'type': 'testing', 'lang': 'C++'},
     }
     
     @staticmethod
@@ -235,6 +247,56 @@ class UniversalTechDetector:
             except:
                 pass
         
+        # C/C++: CMakeLists.txt, conanfile.txt/py, vcpkg.json
+        for cmake_file in repo_path.rglob("CMakeLists.txt"):
+            detected['languages'].add('C++')
+            detected['frameworks'].add('cmake')
+            try:
+                content = cmake_file.read_text().lower()
+                if 'fetchcontent' in content or 'externalproject' in content:
+                    detected['frameworks'].add('cmake')
+                for fw_name, fw_info in UniversalTechDetector.FRAMEWORK_PATTERNS.items():
+                    if fw_info['lang'] in ['C++', 'any'] and any(kw.lower() in content for kw in fw_info['keywords']):
+                        detected['frameworks'].add(fw_name)
+            except:
+                pass
+        
+        for conan_file in list(repo_path.rglob("conanfile.txt")) + list(repo_path.rglob("conanfile.py")):
+            detected['languages'].add('C++')
+            detected['frameworks'].add('conan')
+            try:
+                content = conan_file.read_text().lower()
+                for fw_name, fw_info in UniversalTechDetector.FRAMEWORK_PATTERNS.items():
+                    if fw_info['lang'] in ['C++', 'any'] and any(kw.lower() in content for kw in fw_info['keywords']):
+                        detected['frameworks'].add(fw_name)
+            except:
+                pass
+        
+        for vcpkg_file in repo_path.rglob("vcpkg.json"):
+            detected['languages'].add('C++')
+            detected['frameworks'].add('vcpkg')
+            try:
+                content = vcpkg_file.read_text().lower()
+                if 'boost' in content:
+                    detected['frameworks'].add('boost')
+                if 'openssl' in content:
+                    detected['frameworks'].add('openssl_cpp')
+                if 'grpc' in content:
+                    detected['frameworks'].add('grpc_cpp')
+            except:
+                pass
+        
+        # Java: also check build.gradle and build.gradle.kts
+        for gradle_file in list(repo_path.rglob("build.gradle")) + list(repo_path.rglob("build.gradle.kts")):
+            detected['languages'].add('Java')
+            try:
+                content = gradle_file.read_text().lower()
+                for fw_name, fw_info in UniversalTechDetector.FRAMEWORK_PATTERNS.items():
+                    if fw_info['lang'] in ['Java', 'any'] and any(kw in content for kw in fw_info['keywords']):
+                        detected['frameworks'].add(fw_name)
+            except:
+                pass
+        
         return detected
     
     @staticmethod
@@ -242,11 +304,12 @@ class UniversalTechDetector:
         """Scan actual code files to detect frameworks by imports/usage."""
         detected = {'frameworks': set(), 'languages': set(), 'imports': set()}
         
-        # Language-specific file extensions
         lang_extensions = {
             '.py': 'Python', '.js': 'JavaScript', '.ts': 'TypeScript',
             '.go': 'Go', '.java': 'Java', '.php': 'PHP', '.rb': 'Ruby',
-            '.cs': 'C#', '.cpp': 'C++', '.c': 'C', '.rs': 'Rust'
+            '.cs': 'C#', '.cpp': 'C++', '.cc': 'C++', '.cxx': 'C++',
+            '.c': 'C', '.h': 'C++', '.hpp': 'C++', '.hxx': 'C++',
+            '.rs': 'Rust',
         }
         
         # Get code files to scan
@@ -294,13 +357,14 @@ class UniversalTechDetector:
         """Analyze file/directory structure to infer frameworks."""
         detected = {'frameworks': set(), 'patterns': []}
         
-        # Common framework directory structures
         structure_hints = {
             'django': ['manage.py', 'settings.py', 'urls.py', 'models.py'],
             'rails': ['Gemfile', 'config/routes.rb', 'app/controllers'],
             'spring': ['src/main/java', 'pom.xml', 'application.properties'],
             'laravel': ['artisan', 'app/Http/Controllers', 'routes/web.php'],
             'express': ['package.json', 'node_modules', 'routes/'],
+            'cmake': ['CMakeLists.txt', 'cmake/', 'build/'],
+            'conan': ['conanfile.txt', 'conanfile.py', 'CMakeLists.txt'],
         }
         
         for fw_name, indicators in structure_hints.items():
@@ -316,14 +380,15 @@ class UniversalTechDetector:
         """Find entry point files based on detected tech stack."""
         entry_points = []
         
-        # Common entry point patterns
         entry_patterns = [
             '**/routes.py', '**/routes.js', '**/router.js', '**/router.go',
             '**/app.py', '**/main.py', '**/server.py', '**/api.py',
             '**/app.js', '**/server.js', '**/index.js', '**/main.js',
             '**/main.go', '**/*Handler.go', '**/*Router.go',
             '**/*Controller.java', '**/*Controller.php', '**/*Controller.py',
-            '**/views.py', '**/endpoints.py', '**/handlers.py'
+            '**/views.py', '**/endpoints.py', '**/handlers.py',
+            '**/main.cpp', '**/main.c', '**/*server*.cpp', '**/*socket*.cpp',
+            '**/*handler*.cpp', '**/*service*.cpp',
         ]
         
         for pattern in entry_patterns:
@@ -341,7 +406,6 @@ class UniversalTechDetector:
         """Find security-critical files."""
         security_files = []
         
-        # Security-critical file patterns
         security_patterns = [
             '**/*auth*.py', '**/*login*.py', '**/*session*.py', '**/*token*.py',
             '**/*auth*.js', '**/*login*.js', '**/*session*.js', '**/*token*.js',
@@ -349,7 +413,9 @@ class UniversalTechDetector:
             '**/*Auth*.java', '**/*Login*.java', '**/*Security*.java',
             '**/*auth*.php', '**/*login*.php', '**/*session*.php',
             '**/config.py', '**/settings.py', '**/config.js', '**/config.php',
-            '**/middleware*.py', '**/middleware*.js', '**/middleware*.go'
+            '**/middleware*.py', '**/middleware*.js', '**/middleware*.go',
+            '**/*crypto*.cpp', '**/*crypto*.h', '**/*auth*.cpp', '**/*auth*.h',
+            '**/*ssl*.cpp', '**/*tls*.cpp', '**/*buffer*.cpp', '**/*parser*.cpp',
         ]
         
         for pattern in security_patterns:
@@ -426,6 +492,32 @@ class UniversalTechDetector:
             if fw in framework_risks:
                 risks.extend(framework_risks[fw])
         
+        # C/C++ build-system / library risks
+        cpp_risks = {
+            'cmake': [
+                'CMake FetchContent / ExternalProject without hash pinning',
+                'CMake: insecure add_custom_command with user-controlled input',
+                'CMake: missing hardening flags (-fstack-protector, -D_FORTIFY_SOURCE)',
+            ],
+            'conan': [
+                'Conan: unpinned dependency versions',
+                'Conan: dependencies fetched over HTTP instead of HTTPS',
+                'Conan: missing integrity verification for packages',
+            ],
+            'boost': [
+                'Boost.Asio: unchecked buffer sizes in async reads',
+                'Boost.Serialization: deserialization of untrusted data',
+            ],
+            'openssl_cpp': [
+                'OpenSSL: deprecated cipher suites or protocol versions',
+                'OpenSSL: missing certificate validation',
+                'OpenSSL: insecure random number generation',
+            ],
+        }
+        for fw, fw_risks in cpp_risks.items():
+            if fw in tech_info.get('frameworks', {}):
+                risks.extend(fw_risks)
+
         # Generic risks based on languages
         if 'Python' in tech_info.get('languages', []):
             risks.append('Python: eval(), exec(), pickle.loads() code execution')
@@ -433,8 +525,16 @@ class UniversalTechDetector:
             risks.append('JavaScript: eval(), new Function() code execution')
         if 'PHP' in tech_info.get('languages', []):
             risks.extend(['PHP: system(), shell_exec() command injection', 'PHP: unserialize() object injection'])
+        if 'C++' in tech_info.get('languages', []) or 'C' in tech_info.get('languages', []):
+            risks.extend([
+                'C/C++: Buffer overflow via strcpy/strcat/sprintf/gets (CWE-120)',
+                'C/C++: Use-after-free and double-free (CWE-416/415)',
+                'C/C++: Format string vulnerabilities (CWE-134)',
+                'C/C++: Integer overflow in size calculations (CWE-190)',
+                'C/C++: Null pointer dereference (CWE-476)',
+            ])
         
-        return list(set(risks))  # Deduplicate
+        return list(set(risks))
     
     @staticmethod
     def _merge_results(target: Dict, source: Dict, confidence: float):
@@ -479,6 +579,11 @@ class UniversalTechDetector:
         # Check for microservice indicators
         if 'grpc' in frameworks or 'mongodb' in frameworks:
             return 'microservice'
+        
+        # Check for native / C++ applications
+        native_indicators = {'cmake', 'conan', 'vcpkg', 'boost', 'qt'}
+        if any(fw in frameworks for fw in native_indicators):
+            return 'native_app'
         
         return 'unknown'
     

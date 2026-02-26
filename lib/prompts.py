@@ -21,11 +21,11 @@ class PromptFactory:
         question: str,
         limit: int,
         static_findings: Optional[List[Dict[str, Any]]] = None,
+        profile_hints: Optional[List[Any]] = None,
     ) -> str:
         filenames = [f.name for f in all_files]
         static_context = ""
         if static_findings:
-            # Group findings by filename (basename) for prioritization context
             by_file: Dict[str, List[str]] = {}
             for f in static_findings:
                 file_path = f.get("file", "")
@@ -37,7 +37,7 @@ class PromptFactory:
                     by_file.setdefault(name, []).append(label)
             if by_file:
                 summary = {
-                    name: findings[:5]  # cap per file to avoid token bloat
+                    name: findings[:5]
                     for name, findings in by_file.items()
                 }
                 static_context = f"""
@@ -47,14 +47,36 @@ Static Scanner Results (pre-analyzed — prioritize files with findings):
 Files with static findings should be prioritized first; the AI deep-dive will confirm and expand on these.
 """
 
+        profile_context = ""
+        if profile_hints:
+            sections = []
+            for hint in profile_hints:
+                parts = []
+                if hint.focus_guidance:
+                    parts.append(hint.focus_guidance)
+                if hint.file_patterns:
+                    parts.append(f"High-value filename patterns: {', '.join(hint.file_patterns)}")
+                if hint.extensions:
+                    parts.append(f"Preferred file extensions: {', '.join(hint.extensions)}")
+                if parts:
+                    sections.append("\n".join(parts))
+            if sections:
+                joined = "\n---\n".join(sections)
+                profile_context = f"""
+PROFILE-SPECIFIC GUIDANCE (the user selected specific analysis profiles — use this to bias file selection):
+{joined}
+
+Files matching the profile guidance above should be strongly preferred. The profiles define what the subsequent deep-dive analysis will focus on, so selecting files that align with the profile focus areas maximizes the value of the analysis.
+"""
+
         return f"""You are a lead software architect. Your task is to identify the most critical files to analyze to answer the user's question.
 
 User Question: "{question}"
-{static_context}
+{static_context}{profile_context}
 File List:
 {_json.dumps(filenames, indent=2)}
 
-Return a JSON object with a single key "prioritized_files". This key should contain a list of objects, where each object has a "file_name" and a "reason" explaining its relevance. Limit the list to the top {limit} most relevant files. When static scanner results are provided, strongly prefer files that already have findings — the AI analysis will validate and deepen those. Your response must contain ONLY the JSON object.
+Return a JSON object with a single key "prioritized_files". This key should contain a list of objects, where each object has a "file_name" and a "reason" explaining its relevance. Limit the list to the top {limit} most relevant files. When static scanner results are provided, strongly prefer files that already have findings — the AI analysis will validate and deepen those. When profile-specific guidance is provided, use it to identify files that match the analysis profiles the user has selected. Your response must contain ONLY the JSON object.
 Example:
 {{
   "prioritized_files": [

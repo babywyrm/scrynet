@@ -38,7 +38,7 @@ from lib.prompts import PromptFactory
 from lib.deduplication import deduplicate_findings
 from lib.cost_tracker import CostTracker
 from lib.cost_estimator import estimate_scan_cost
-from lib.profile_metadata import list_profiles_by_category, get_all_profiles
+from lib.profile_metadata import list_profiles_by_category, get_all_profiles, get_prioritization_hints_for_profiles
 from lib.config import get_preset, list_presets, SmartDefaults, TechStackDetector
 from lib.tech_detector import EnhancedTechDetector, generate_framework_aware_prioritization_question
 from lib.universal_detector import UniversalTechDetector
@@ -57,6 +57,9 @@ SUPPORTED_EXTENSIONS = {
     '.go': 'go', '.py': 'python', '.java': 'java', '.js': 'javascript',
     '.jsx': 'javascript', '.ts': 'typescript', '.tsx': 'typescript',
     '.php': 'php', '.html': 'html', '.htm': 'html', '.css': 'css', '.sql': 'sql',
+    '.cpp': 'cpp', '.cc': 'cpp', '.cxx': 'cpp', '.c': 'c',
+    '.h': 'cpp', '.hpp': 'cpp', '.hxx': 'cpp',
+    '.cmake': 'cmake',
 }
 
 
@@ -535,12 +538,18 @@ class Orchestrator:
         if self.verbose and enhanced_question != self.question:
             self.console.print(f"[dim]💡 Enhanced question with framework context[/dim]")
         
+        # Collect profile-specific prioritization hints
+        profile_hints = get_prioritization_hints_for_profiles(self.profiles)
+        if self.verbose and profile_hints:
+            self.console.print(f"[dim]📋 Injecting prioritization hints from {len(profile_hints)} active profile(s)[/dim]")
+        
         try:
             prompt = PromptFactory.prioritization(
                 all_files,
                 enhanced_question,
                 self.prioritize_top,
                 static_findings=static_findings,
+                profile_hints=profile_hints,
             )
             response = self.client.messages.create(
                 model=self.model,
@@ -1757,7 +1766,7 @@ def main() -> None:
                         choices=['mcp', 'quick', 'ctf', 'ctf-fast', 'security-audit', 'pentest', 'compliance'],
                         help="Use a preset configuration (overrides individual flags). Available: mcp (2 files, fastest), quick, ctf, ctf-fast, security-audit, pentest, compliance. Use --list-presets to see details.")
     parser.add_argument("--profile", type=str.lower, default="owasp",
-                        help="Comma-separated list of AI profiles. Available: owasp, ctf, code_review, modern, soc2, pci, compliance, performance, attacker (e.g., 'owasp,ctf' or 'soc2,compliance').")
+                        help="Comma-separated list of AI profiles. Available: owasp, ctf, code_review, modern, soc2, pci, compliance, performance, attacker, springboot, cpp_conan, flask (e.g., 'owasp,ctf' or 'springboot,owasp').")
     parser.add_argument("--static-rules", type=str,
                         help="Comma-separated paths to static rule files for Agent Smith.")
     parser.add_argument("--severity", type=str.upper,

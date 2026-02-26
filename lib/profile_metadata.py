@@ -8,10 +8,20 @@ Each profile includes:
 - Use cases: When to use this profile
 - Key focus areas: What vulnerabilities/issues it detects
 - Examples: Command-line usage examples
+- Prioritization hints: Guidance for the AI file-prioritization stage
 """
 
-from dataclasses import dataclass
-from typing import List, Dict
+from dataclasses import dataclass, field
+from typing import List, Dict, Optional
+
+
+@dataclass
+class PrioritizationHints:
+    """Hints injected into the AI prioritization prompt so that
+    profile-specific knowledge drives file selection."""
+    file_patterns: List[str] = field(default_factory=list)
+    extensions: List[str] = field(default_factory=list)
+    focus_guidance: str = ""
 
 
 @dataclass
@@ -23,8 +33,9 @@ class ProfileMetadata:
     use_cases: List[str]
     focus_areas: List[str]
     examples: List[str]
-    category: str  # "security", "compliance", "code_quality"
+    category: str  # "security", "compliance", "code_quality", "framework"
     default: bool = False
+    prioritization_hints: Optional[PrioritizationHints] = None
 
 
 # Profile metadata registry
@@ -56,9 +67,14 @@ PROFILE_METADATA: Dict[str, ProfileMetadata] = {
             "--profile owasp --prioritize --prioritize-top 20"
         ],
         category="security",
-        default=True
+        default=True,
+        prioritization_hints=PrioritizationHints(
+            file_patterns=["*auth*", "*login*", "*session*", "*config*", "*route*", "*controller*", "*middleware*", "*api*"],
+            extensions=[],
+            focus_guidance="Prioritize files that handle authentication, authorization, user input, database queries, session management, and configuration. Entry points (routes, controllers, API handlers) and middleware are high value.",
+        ),
     ),
-    
+
     "ctf": ProfileMetadata(
         name="ctf",
         display_name="CTF / Exploitation",
@@ -85,9 +101,14 @@ PROFILE_METADATA: Dict[str, ProfileMetadata] = {
             "--profile ctf",
             "--profile owasp,ctf --generate-payloads"
         ],
-        category="security"
+        category="security",
+        prioritization_hints=PrioritizationHints(
+            file_patterns=["*flag*", "*secret*", "*upload*", "*admin*", "*login*", "*exec*", "*cmd*", "*eval*", "*deserializ*"],
+            extensions=[],
+            focus_guidance="Prioritize files likely to contain exploitable vulnerabilities: entry points with user input, file upload handlers, admin panels, command execution wrappers, deserialization code, and anything referencing flags or secrets.",
+        ),
     ),
-    
+
     "attacker": ProfileMetadata(
         name="attacker",
         display_name="Attacker Perspective",
@@ -109,9 +130,14 @@ PROFILE_METADATA: Dict[str, ProfileMetadata] = {
             "--profile attacker",
             "--threat-model  # Automatically uses attacker profile"
         ],
-        category="security"
+        category="security",
+        prioritization_hints=PrioritizationHints(
+            file_patterns=["*route*", "*handler*", "*controller*", "*gateway*", "*proxy*", "*api*", "*auth*", "*token*"],
+            extensions=[],
+            focus_guidance="Prioritize external-facing entry points (routes, API handlers, gateways, proxies), authentication/authorization code, and trust boundary crossings. Files that accept and process untrusted input are highest priority.",
+        ),
     ),
-    
+
     "code_review": ProfileMetadata(
         name="code_review",
         display_name="Code Review",
@@ -134,9 +160,14 @@ PROFILE_METADATA: Dict[str, ProfileMetadata] = {
             "--profile code_review",
             "--profile owasp,code_review  # Security + Quality"
         ],
-        category="code_quality"
+        category="code_quality",
+        prioritization_hints=PrioritizationHints(
+            file_patterns=["*service*", "*manager*", "*helper*", "*util*", "*handler*", "*model*"],
+            extensions=[],
+            focus_guidance="Prioritize core business-logic files (services, managers, handlers) and utility modules where code complexity and technical debt tend to accumulate. Skip auto-generated and test files.",
+        ),
     ),
-    
+
     "performance": ProfileMetadata(
         name="performance",
         display_name="Performance",
@@ -159,9 +190,14 @@ PROFILE_METADATA: Dict[str, ProfileMetadata] = {
             "--profile performance",
             "--profile owasp,performance  # Security + Performance"
         ],
-        category="code_quality"
+        category="code_quality",
+        prioritization_hints=PrioritizationHints(
+            file_patterns=["*repository*", "*dao*", "*query*", "*service*", "*handler*", "*worker*", "*cache*", "*batch*"],
+            extensions=[],
+            focus_guidance="Prioritize database access layers (repositories, DAOs, query builders), service classes with business logic loops, background workers, batch processors, and caching layers where performance bottlenecks are most likely.",
+        ),
     ),
-    
+
     "modern": ProfileMetadata(
         name="modern",
         display_name="Modern Security",
@@ -184,9 +220,14 @@ PROFILE_METADATA: Dict[str, ProfileMetadata] = {
             "--profile modern",
             "--profile owasp,modern  # Traditional + Modern"
         ],
-        category="security"
+        category="security",
+        prioritization_hints=PrioritizationHints(
+            file_patterns=["Dockerfile*", "docker-compose*", "*.yml", "*.yaml", "*gateway*", "*proxy*", "*lambda*", "*serverless*", ".github/workflows/*", "Jenkinsfile*"],
+            extensions=[".yml", ".yaml", ".tf", ".hcl"],
+            focus_guidance="Prioritize infrastructure-as-code (Dockerfiles, Kubernetes manifests, Terraform), CI/CD pipeline configs, API gateway definitions, serverless function handlers, and dependency manifests. These are where modern security issues concentrate.",
+        ),
     ),
-    
+
     "soc2": ProfileMetadata(
         name="soc2",
         display_name="SOC 2 Compliance",
@@ -209,9 +250,14 @@ PROFILE_METADATA: Dict[str, ProfileMetadata] = {
             "--profile soc2",
             "--profile soc2,compliance  # Comprehensive compliance"
         ],
-        category="compliance"
+        category="compliance",
+        prioritization_hints=PrioritizationHints(
+            file_patterns=["*auth*", "*encrypt*", "*crypto*", "*log*", "*audit*", "*monitor*", "*config*", "*access*"],
+            extensions=[],
+            focus_guidance="Prioritize authentication/authorization modules, encryption and cryptographic implementations, logging and audit-trail code, access-control configuration, and monitoring setup. SOC 2 cares about controls, not features.",
+        ),
     ),
-    
+
     "pci": ProfileMetadata(
         name="pci",
         display_name="PCI-DSS Compliance",
@@ -234,9 +280,14 @@ PROFILE_METADATA: Dict[str, ProfileMetadata] = {
             "--profile pci",
             "--profile pci,compliance  # PCI + General compliance"
         ],
-        category="compliance"
+        category="compliance",
+        prioritization_hints=PrioritizationHints(
+            file_patterns=["*payment*", "*card*", "*checkout*", "*billing*", "*stripe*", "*token*", "*encrypt*", "*key*"],
+            extensions=[],
+            focus_guidance="Prioritize payment processing code, checkout flows, billing modules, tokenization logic, encryption/key-management files, and any file that handles or stores cardholder data (PAN, CVV, expiry).",
+        ),
     ),
-    
+
     "compliance": ProfileMetadata(
         name="compliance",
         display_name="Regulatory Compliance",
@@ -260,8 +311,168 @@ PROFILE_METADATA: Dict[str, ProfileMetadata] = {
             "--profile compliance",
             "--profile soc2,pci,compliance  # Comprehensive compliance"
         ],
-        category="compliance"
-    )
+        category="compliance",
+        prioritization_hints=PrioritizationHints(
+            file_patterns=["*privacy*", "*consent*", "*gdpr*", "*pii*", "*user*data*", "*audit*", "*retention*", "*log*"],
+            extensions=[],
+            focus_guidance="Prioritize files dealing with personal data (PII/PHI), consent management, data retention/deletion logic, audit trails, and user-data export. Any file that stores, processes, or transmits regulated data is high priority.",
+        ),
+    ),
+
+    # ---- New framework-specific profiles ----
+
+    "springboot": ProfileMetadata(
+        name="springboot",
+        display_name="Spring Boot / Microservices",
+        description="Security analysis for Spring Boot and Java microservice architectures. Covers actuator exposure, SpEL injection, mass assignment, JPA/Hibernate injection, Spring Security misconfiguration, OAuth2/JWT issues, and service-mesh concerns.",
+        use_cases=[
+            "Spring Boot application security audits",
+            "Java microservices security reviews",
+            "Spring Security configuration reviews",
+            "API gateway and service-mesh audits"
+        ],
+        focus_areas=[
+            "Actuator endpoint exposure",
+            "Spring Expression Language (SpEL) injection",
+            "Mass assignment via @RequestBody / @ModelAttribute",
+            "JPA/Hibernate HQL/JPQL injection",
+            "Spring Security filter-chain misconfiguration",
+            "CORS and CSRF misconfiguration",
+            "OAuth2 / JWT token handling flaws",
+            "Eureka / Zuul / Spring Cloud Gateway misconfig",
+            "Insecure deserialization (Jackson, Kryo)",
+            "Sensitive data in application.yml / application.properties"
+        ],
+        examples=[
+            "--profile springboot",
+            "--profile springboot,owasp --prioritize --prioritize-top 25",
+            "--profile springboot,modern  # Microservices + modern security"
+        ],
+        category="framework",
+        prioritization_hints=PrioritizationHints(
+            file_patterns=[
+                "*Controller.java", "*RestController*", "*SecurityConfig*",
+                "*WebSecurityConfig*", "*AuthConfig*", "*JwtFilter*",
+                "*Repository.java", "*Service.java", "*Config.java",
+                "application.yml", "application.properties", "application-*.yml",
+                "bootstrap.yml", "pom.xml", "build.gradle*",
+            ],
+            extensions=[".java", ".xml", ".yml", ".yaml", ".properties", ".gradle"],
+            focus_guidance=(
+                "This is a Spring Boot / Java microservices scan. Prioritize: "
+                "(1) @RestController and @Controller classes (HTTP entry points), "
+                "(2) Spring Security configuration (SecurityConfig, WebSecurityConfig, filter chains), "
+                "(3) application.yml / application.properties (credentials, actuator exposure, debug flags), "
+                "(4) @Repository / JPA entity classes (injection surface), "
+                "(5) @Service classes with business logic, "
+                "(6) Gateway/proxy configs (Zuul, Spring Cloud Gateway), "
+                "(7) OAuth2/JWT token handling code. "
+                "Files named *Controller*, *Security*, *Config*, *Repository* are almost always relevant."
+            ),
+        ),
+    ),
+
+    "cpp_conan": ProfileMetadata(
+        name="cpp_conan",
+        display_name="C++ / Conan / Native Security",
+        description="Security analysis for C/C++ codebases with Conan, CMake, or vcpkg dependency management. Focuses on memory safety, buffer overflows, format string bugs, integer overflows, use-after-free, and supply-chain risks in native build systems.",
+        use_cases=[
+            "C/C++ application security audits",
+            "Embedded and IoT firmware reviews",
+            "Native library and SDK security reviews",
+            "CMake / Conan supply-chain audits"
+        ],
+        focus_areas=[
+            "Buffer overflows (stack and heap) — CWE-120, CWE-122",
+            "Use-after-free — CWE-416",
+            "Double-free — CWE-415",
+            "Format string vulnerabilities — CWE-134",
+            "Integer overflow / wraparound — CWE-190",
+            "Unsafe C functions (gets, strcpy, sprintf, strcat)",
+            "Null pointer dereference — CWE-476",
+            "Race conditions in multithreaded code — CWE-362",
+            "CMake FetchContent / ExternalProject without hash pinning",
+            "Conan dependency vulnerabilities and version pinning",
+            "Improper input validation on network/IPC buffers"
+        ],
+        examples=[
+            "--profile cpp_conan",
+            "--profile cpp_conan,owasp --prioritize --prioritize-top 30",
+            "--profile cpp_conan,performance  # Memory safety + performance"
+        ],
+        category="framework",
+        prioritization_hints=PrioritizationHints(
+            file_patterns=[
+                "main.cpp", "main.c", "CMakeLists.txt", "conanfile.py",
+                "conanfile.txt", "vcpkg.json", "*socket*", "*network*",
+                "*buffer*", "*parser*", "*protocol*", "*crypto*", "*auth*",
+                "*serialize*", "*alloc*", "*memory*",
+            ],
+            extensions=[".cpp", ".cc", ".cxx", ".c", ".h", ".hpp", ".cmake"],
+            focus_guidance=(
+                "This is a C/C++ native code security scan. Prioritize: "
+                "(1) Files with network/socket I/O (attack surface for buffer overflows), "
+                "(2) Parsers and protocol handlers (complex input processing = high vuln density), "
+                "(3) Memory management code (allocators, custom containers, RAII wrappers), "
+                "(4) Cryptographic implementations, "
+                "(5) CMakeLists.txt and conanfile.py/txt (supply-chain: unpinned deps, FetchContent without hashes), "
+                "(6) Any file using C string functions (strcpy, sprintf, gets, strcat), "
+                "(7) Multithreaded code (mutex, atomic, thread). "
+                "Header files (.h/.hpp) that define buffer sizes, struct layouts, or API contracts are also important."
+            ),
+        ),
+    ),
+
+    "flask": ProfileMetadata(
+        name="flask",
+        display_name="Flask / Python Web Security",
+        description="Security analysis for Python Flask web applications. Covers SSTI via Jinja2, debug mode exposure, weak secret keys, SQLAlchemy injection, session fixation, unsafe file uploads, pickle deserialization, and blueprint authorization bypass.",
+        use_cases=[
+            "Flask application security audits",
+            "Python web API security reviews",
+            "Jinja2 template injection assessments",
+            "SQLAlchemy / database security reviews"
+        ],
+        focus_areas=[
+            "Server-Side Template Injection (SSTI) via Jinja2",
+            "Debug mode exposure (app.run(debug=True))",
+            "Weak or hardcoded SECRET_KEY",
+            "SQLAlchemy raw SQL and text() injection",
+            "Session fixation and cookie security",
+            "CORS misconfiguration (flask-cors)",
+            "Unsafe file uploads (path traversal, unrestricted types)",
+            "Pickle / marshal deserialization of untrusted data",
+            "Missing CSRF protection",
+            "Blueprint authorization bypass",
+            "Insecure direct object references in view functions"
+        ],
+        examples=[
+            "--profile flask",
+            "--profile flask,owasp --prioritize --prioritize-top 20",
+            "--profile flask,code_review  # Security + quality"
+        ],
+        category="framework",
+        prioritization_hints=PrioritizationHints(
+            file_patterns=[
+                "app.py", "wsgi.py", "config.py", "settings.py",
+                "*routes*", "*views*", "*auth*", "*login*",
+                "*models*", "*forms*", "*upload*", "*api*",
+                "*__init__.py", "requirements.txt",
+            ],
+            extensions=[".py", ".html", ".jinja2", ".j2", ".cfg", ".ini"],
+            focus_guidance=(
+                "This is a Flask / Python web security scan. Prioritize: "
+                "(1) app.py / wsgi.py / __init__.py (app factory, debug mode, secret_key), "
+                "(2) Route/view files (user input entry points, IDOR, auth checks), "
+                "(3) Template files (.html/.jinja2) for SSTI vectors, "
+                "(4) Model files with SQLAlchemy queries (raw SQL, text() calls), "
+                "(5) Auth/login modules (session handling, password storage, CSRF), "
+                "(6) File upload handlers (path traversal, unrestricted types), "
+                "(7) config.py / settings.py (hardcoded secrets, debug flags, database URIs). "
+                "Blueprint __init__.py files often contain authorization decorators worth reviewing."
+            ),
+        ),
+    ),
 }
 
 
@@ -276,6 +487,17 @@ def get_profile(name: str) -> ProfileMetadata:
     if name_lower not in PROFILE_METADATA:
         raise ValueError(f"Unknown profile: {name}. Available profiles: {', '.join(PROFILE_METADATA.keys())}")
     return PROFILE_METADATA[name_lower]
+
+
+def get_prioritization_hints_for_profiles(profile_names: List[str]) -> List[PrioritizationHints]:
+    """Collect prioritization hints for a list of active profiles."""
+    hints = []
+    for name in profile_names:
+        name_lower = name.lower().strip()
+        meta = PROFILE_METADATA.get(name_lower)
+        if meta and meta.prioritization_hints:
+            hints.append(meta.prioritization_hints)
+    return hints
 
 
 def list_profiles_by_category() -> Dict[str, List[ProfileMetadata]]:
@@ -302,5 +524,3 @@ def validate_profiles(profile_names: List[str]) -> List[str]:
         available = ', '.join(PROFILE_METADATA.keys())
         raise ValueError(f"Invalid profiles: {', '.join(invalid)}. Available profiles: {available}")
     return valid
-
-

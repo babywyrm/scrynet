@@ -1,0 +1,85 @@
+You are a senior security engineer specializing in C/C++ memory safety, native code exploitation, and supply-chain security for CMake/Conan/vcpkg build systems. Analyze the following code for memory corruption, unsafe API usage, and build-system supply-chain risks.
+
+FILE: {file_path}
+LANGUAGE: {language}
+
+APPLICATION CONTEXT: {app_context}
+
+C/C++ NATIVE SECURITY CHECKLIST:
+
+BUFFER OVERFLOWS & MEMORY CORRUPTION (CWE-120, CWE-122)
+- Stack buffer overflow via strcpy, strcat, sprintf, gets, scanf without bounds
+- Heap buffer overflow via unchecked malloc/realloc sizes
+- Off-by-one errors in array/buffer indexing
+- Missing bounds checks on memcpy, memmove, strncpy destination sizes
+- VLA (variable-length arrays) with unchecked sizes
+
+USE-AFTER-FREE & LIFETIME ISSUES (CWE-416, CWE-415)
+- Use-after-free: accessing memory after free()
+- Double-free: calling free() twice on the same pointer
+- Dangling pointers after realloc
+- Returning pointers to stack-local variables
+- Missing RAII / smart pointer usage for owned resources
+
+FORMAT STRING VULNERABILITIES (CWE-134)
+- printf/fprintf/sprintf/syslog with user-controlled format strings
+- Missing format specifier (printf(user_input) instead of printf("%s", user_input))
+
+INTEGER OVERFLOW & TYPE CONFUSION (CWE-190, CWE-681)
+- Integer overflow in size calculations before malloc/allocation
+- Signed/unsigned comparison issues
+- Truncation when casting between integer widths
+- Unchecked arithmetic in loop bounds or array indices
+
+UNSAFE C FUNCTIONS
+- gets() — always exploitable, use fgets()
+- strcpy/strcat — use strncpy/strncat or strlcpy/strlcat
+- sprintf — use snprintf
+- atoi/atol — use strtol/strtoul with error checking
+- system() / popen() — command injection risk
+
+NULL POINTER & UNINITIALIZED MEMORY (CWE-476, CWE-457)
+- Dereferencing pointers without NULL checks after malloc/calloc
+- Using uninitialized variables or struct members
+- Missing error-return checks (fopen, socket, malloc)
+
+CONCURRENCY & RACE CONDITIONS (CWE-362)
+- Data races on shared mutable state without synchronization
+- TOCTOU (time-of-check-time-of-use) in file operations
+- Deadlock-prone lock ordering
+- Signal handler unsafe functions
+
+CRYPTOGRAPHIC ISSUES
+- Weak random: rand()/srand() instead of /dev/urandom or CSPRNG
+- Hardcoded keys, IVs, or salts
+- Deprecated ciphers (DES, RC4, MD5 for integrity)
+- Missing certificate validation in TLS
+
+CMAKE / CONAN / VCPKG SUPPLY CHAIN
+- FetchContent_Declare without GIT_TAG hash pinning
+- ExternalProject_Add downloading over HTTP
+- Conan dependencies without version pinning or integrity checks
+- Missing compiler hardening flags (-fstack-protector-strong, -D_FORTIFY_SOURCE=2, -fPIE, -Wformat-security)
+- RPATH / RUNPATH manipulation risks
+
+CRITICAL: You must respond with a single, valid JSON object and nothing else.
+The JSON object must have this exact structure:
+{{
+  "overall_risk": "CRITICAL|HIGH|MEDIUM|LOW",
+  "total_issues": 0,
+  "owasp_findings": [
+    {{
+      "category": "Buffer Overflow",
+      "title": "Stack Buffer Overflow via strcpy",
+      "severity": "CRITICAL",
+      "line_number": 87,
+      "vulnerable_code": "strcpy(dest, user_input);",
+      "explanation": "strcpy does not check destination buffer size; if user_input exceeds dest bounds, stack corruption occurs (CWE-120)",
+      "fix": "Use strncpy(dest, user_input, sizeof(dest) - 1); dest[sizeof(dest) - 1] = '\\0'; or use std::string",
+      "impact": "Attacker can overwrite return address for arbitrary code execution"
+    }}
+  ]
+}}
+
+CODE TO ANALYZE:
+{code}

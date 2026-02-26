@@ -103,6 +103,17 @@ class EnhancedTechDetector:
             if php_info['app_type'] != 'unknown':
                 result['app_type'] = php_info['app_type']
         
+        # C/C++ detection
+        cpp_info = EnhancedTechDetector._detect_cpp(repo_path)
+        if cpp_info:
+            result['languages'].add('C++')
+            result['frameworks'].extend(cpp_info['frameworks'])
+            result['entry_points'].extend(cpp_info['entry_points'])
+            result['security_critical_files'].extend(cpp_info['security_files'])
+            result['framework_specific_risks'].extend(cpp_info['risks'])
+            if cpp_info['app_type'] != 'unknown':
+                result['app_type'] = cpp_info['app_type']
+        
         # Docker/container detection
         result['has_docker'] = (repo_path / "Dockerfile").exists() or (repo_path / "docker-compose.yml").exists()
         
@@ -320,9 +331,18 @@ class EnhancedTechDetector:
     
     @staticmethod
     def _detect_java(repo_path: Path) -> Optional[Dict]:
-        """Detect Java frameworks."""
+        """Detect Java frameworks (pom.xml AND build.gradle/build.gradle.kts)."""
+        build_files = []
         pom_xml = repo_path / "pom.xml"
-        if not pom_xml.exists():
+        if pom_xml.exists():
+            build_files.append(pom_xml)
+        for gradle_name in ("build.gradle", "build.gradle.kts"):
+            gf = repo_path / gradle_name
+            if gf.exists():
+                build_files.append(gf)
+            build_files.extend(repo_path.rglob(gradle_name))
+        
+        if not build_files:
             return None
         
         info = {
@@ -334,7 +354,7 @@ class EnhancedTechDetector:
         }
         
         try:
-            content = pom_xml.read_text().lower()
+            content = "\n".join(bf.read_text().lower() for bf in build_files)
             
             if 'spring' in content:
                 info['frameworks'].append('Spring Boot')
@@ -343,7 +363,9 @@ class EnhancedTechDetector:
                     'Spring: Actuator endpoints exposed',
                     'Spring Expression Language (SpEL) injection',
                     'Mass assignment via @RequestBody',
-                    'JPA/Hibernate injection'
+                    'JPA/Hibernate injection',
+                    'Spring Security filter-chain misconfiguration',
+                    'CORS / CSRF misconfiguration in Spring Security',
                 ])
                 info['entry_points'].extend([
                     str(f.relative_to(repo_path)) for f in repo_path.rglob('*.java')
@@ -353,11 +375,94 @@ class EnhancedTechDetector:
                     str(f.relative_to(repo_path)) for f in repo_path.rglob('*.java')
                     if f.is_file() and ('Security' in f.name or 'Auth' in f.name or 'Config' in f.name)
                 ])
+                # Also pick up application.yml / application.properties
+                for cfg_pattern in ['application.yml', 'application.properties', 'application-*.yml']:
+                    info['security_files'].extend([
+                        str(f.relative_to(repo_path)) for f in repo_path.rglob(cfg_pattern)
+                        if f.is_file()
+                    ])
         
         except Exception:
             pass
         
         return info if info['frameworks'] else None
+    
+    @staticmethod
+    def _detect_cpp(repo_path: Path) -> Optional[Dict]:
+        """Detect C/C++ build systems, libraries, and security-critical files."""
+        cmake_files = list(repo_path.rglob("CMakeLists.txt"))
+        conan_files = list(repo_path.rglob("conanfile.txt")) + list(repo_path.rglob("conanfile.py"))
+        vcpkg_files = list(repo_path.rglob("vcpkg.json"))
+        
+        has_cpp = bool(cmake_files or conan_files or vcpkg_files or list(repo_path.rglob("*.cpp"))[:1])
+        if not has_cpp:
+            return None
+        
+        info = {
+            'frameworks': [],
+            'entry_points': [],
+            'security_files': [],
+            'risks': [],
+            'app_type': 'native_app'
+        }
+        
+        if cmake_files:
+            info['frameworks'].append('CMake')
+        if conan_files:
+            info['frameworks'].append('Conan')
+        if vcpkg_files:
+            info['frameworks'].append('vcpkg')
+        
+        try:
+            all_build_content = ""
+            for bf in (cmake_files + conan_files + vcpkg_files)[:10]:
+                all_build_content += bf.read_text(errors='ignore').lower() + "\n"
+            
+            if 'boost' in all_build_content:
+                info['frameworks'].append('Boost')
+            if 'openssl' in all_build_content:
+                info['frameworks'].append('OpenSSL')
+            if 'grpc' in all_build_content or 'protobuf' in all_build_content:
+                info['frameworks'].append('gRPC-C++')
+            if 'qt' in all_build_content:
+                info['frameworks'].append('Qt')
+            if 'poco' in all_build_content:
+                info['frameworks'].append('Poco')
+            
+            if 'fetchcontent' in all_build_content or 'externalproject' in all_build_content:
+                info['risks'].append('CMake FetchContent/ExternalProject without hash pinning')
+            
+            info['risks'].extend([
+                'C/C++: Buffer overflow via strcpy/strcat/sprintf/gets (CWE-120)',
+                'C/C++: Use-after-free (CWE-416) and double-free (CWE-415)',
+                'C/C++: Format string vulnerabilities (CWE-134)',
+                'C/C++: Integer overflow in size calculations (CWE-190)',
+            ])
+            
+            if conan_files:
+                info['risks'].append('Conan: Unpinned dependency versions or HTTP-only remotes')
+            
+        except Exception:
+            pass
+        
+        cpp_extensions = {'.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.hxx'}
+        for f in repo_path.rglob('*'):
+            if not f.is_file() or f.suffix not in cpp_extensions:
+                continue
+            fname_lower = f.name.lower()
+            try:
+                rel = str(f.relative_to(repo_path))
+            except ValueError:
+                continue
+            if fname_lower.startswith('main.') or 'server' in fname_lower or 'socket' in fname_lower or 'handler' in fname_lower:
+                info['entry_points'].append(rel)
+            if any(kw in fname_lower for kw in ['crypto', 'ssl', 'tls', 'auth', 'token', 'password', 'buffer', 'parser', 'alloc']):
+                info['security_files'].append(rel)
+        
+        info['entry_points'] = list(set(info['entry_points']))[:50]
+        info['security_files'] = list(set(info['security_files']))[:50]
+        
+        return info
     
     @staticmethod
     def _detect_php(repo_path: Path) -> Optional[Dict]:

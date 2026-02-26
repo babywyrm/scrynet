@@ -189,6 +189,102 @@ This command displays:
 --profile owasp,modern  # Traditional + Modern
 ```
 
+### Framework-Specific Profiles
+
+#### `springboot`
+
+**Focus:** Spring Boot and Java microservices security
+
+**Description:** Security analysis for Spring Boot and Java microservice architectures. Covers actuator exposure, SpEL injection, mass assignment, JPA/Hibernate injection, Spring Security misconfiguration, OAuth2/JWT issues, and service-mesh concerns.
+
+**Use Cases:**
+- Spring Boot application security audits
+- Java microservices security reviews
+- Spring Security configuration reviews
+- API gateway and service-mesh audits
+
+**Focus Areas:**
+- Actuator endpoint exposure
+- Spring Expression Language (SpEL) injection
+- Mass assignment via @RequestBody / @ModelAttribute
+- JPA/Hibernate HQL/JPQL injection
+- Spring Security filter-chain misconfiguration
+- CORS and CSRF misconfiguration
+- OAuth2 / JWT token handling flaws
+- Eureka / Zuul / Spring Cloud Gateway misconfig
+- Insecure deserialization (Jackson, Kryo)
+- Sensitive data in application.yml / application.properties
+
+**Examples:**
+```bash
+--profile springboot
+--profile springboot,owasp --prioritize --prioritize-top 25
+--profile springboot,modern  # Microservices + modern security
+```
+
+#### `cpp_conan`
+
+**Focus:** C/C++ native code and supply-chain security
+
+**Description:** Security analysis for C/C++ codebases with Conan, CMake, or vcpkg dependency management. Focuses on memory safety, buffer overflows, format string bugs, integer overflows, use-after-free, and supply-chain risks in native build systems.
+
+**Use Cases:**
+- C/C++ application security audits
+- Embedded and IoT firmware reviews
+- Native library and SDK security reviews
+- CMake / Conan supply-chain audits
+
+**Focus Areas:**
+- Buffer overflows (stack and heap) -- CWE-120, CWE-122
+- Use-after-free -- CWE-416
+- Double-free -- CWE-415
+- Format string vulnerabilities -- CWE-134
+- Integer overflow / wraparound -- CWE-190
+- Unsafe C functions (gets, strcpy, sprintf, strcat)
+- Null pointer dereference -- CWE-476
+- Race conditions in multithreaded code -- CWE-362
+- CMake FetchContent / ExternalProject without hash pinning
+- Conan dependency vulnerabilities and version pinning
+
+**Examples:**
+```bash
+--profile cpp_conan
+--profile cpp_conan,owasp --prioritize --prioritize-top 30
+--profile cpp_conan,performance  # Memory safety + performance
+```
+
+#### `flask`
+
+**Focus:** Flask and Python web application security
+
+**Description:** Security analysis for Python Flask web applications. Covers SSTI via Jinja2, debug mode exposure, weak secret keys, SQLAlchemy injection, session fixation, unsafe file uploads, pickle deserialization, and blueprint authorization bypass.
+
+**Use Cases:**
+- Flask application security audits
+- Python web API security reviews
+- Jinja2 template injection assessments
+- SQLAlchemy / database security reviews
+
+**Focus Areas:**
+- Server-Side Template Injection (SSTI) via Jinja2
+- Debug mode exposure (app.run(debug=True))
+- Weak or hardcoded SECRET_KEY
+- SQLAlchemy raw SQL and text() injection
+- Session fixation and cookie security
+- CORS misconfiguration (flask-cors)
+- Unsafe file uploads (path traversal, unrestricted types)
+- Pickle / marshal deserialization of untrusted data
+- Missing CSRF protection
+- Blueprint authorization bypass
+- Insecure direct object references in view functions
+
+**Examples:**
+```bash
+--profile flask
+--profile flask,owasp --prioritize --prioritize-top 20
+--profile flask,code_review  # Security + quality
+```
+
 ### Compliance Profiles
 
 #### `soc2`
@@ -286,6 +382,15 @@ python3 agentsmith.py hybrid ./repo ./scanner --profile modern,performance
 
 # CTF + OWASP (comprehensive security)
 python3 agentsmith.py hybrid ./repo ./scanner --profile owasp,ctf
+
+# Spring Boot microservice audit
+python3 agentsmith.py hybrid ./repo ./scanner --profile springboot,owasp --prioritize
+
+# C++ native code audit
+python3 agentsmith.py hybrid ./repo ./scanner --profile cpp_conan --prioritize --prioritize-top 30
+
+# Flask web app audit
+python3 agentsmith.py hybrid ./repo ./scanner --profile flask,owasp --prioritize
 ```
 
 ## Profile Recommendations by Use Case
@@ -322,6 +427,21 @@ python3 agentsmith.py hybrid ./repo ./scanner --profile owasp,ctf
 --profile modern,owasp
 ```
 
+### Spring Boot / Java Microservices
+```bash
+--profile springboot,owasp --prioritize
+```
+
+### C/C++ Native Code
+```bash
+--profile cpp_conan --prioritize --prioritize-top 30
+```
+
+### Flask / Python Web App
+```bash
+--profile flask,owasp --prioritize
+```
+
 ### Comprehensive Analysis
 ```bash
 --profile owasp,code_review,modern,performance
@@ -336,15 +456,37 @@ Each profile:
 - Can be combined with other profiles for comprehensive analysis
 - When used with `--deduplicate`, similar findings from multiple profiles are merged intelligently
 
+## Profile-Driven Prioritization
+
+When `--prioritize` is used, profile-specific knowledge is automatically injected into the AI
+file-prioritization stage. Each profile declares **prioritization hints** that tell the AI
+prioritizer which files are most relevant for that profile's focus area.
+
+For example, running `--profile springboot --prioritize` will bias file selection toward
+`*Controller.java`, `SecurityConfig*`, `application.yml`, `*Repository.java`, and other
+Spring-specific files. Running `--profile cpp_conan --prioritize` will bias toward
+`main.cpp`, `CMakeLists.txt`, `conanfile.py`, parser/socket/buffer code, and header files
+that define buffer sizes or API contracts.
+
+This works alongside the existing tech-detection system (which auto-detects frameworks from
+dependency files). The difference is:
+- **Tech detection** is automatic ("I see a pom.xml, this might be Spring").
+- **Profile hints** are intent-driven ("The user chose springboot, so they specifically want
+  Spring-focused analysis").
+
+Both signals feed into the prioritization prompt, giving the AI the best possible context for
+selecting the most relevant files.
+
 ## Important Notes
 
 - **Default Profile:** If no profile is specified, `owasp` is used by default
 - **Case Insensitive:** Profile names are case-insensitive (e.g., `OWASP`, `owasp`, `Owasp` all work)
 - **Invalid Profiles:** Invalid profile names will cause an error with a list of available profiles
 - **Cost Impact:** Multiple profiles increase analysis time and API costs
-- **Prioritization:** Use `--prioritize` with multiple profiles to save time and cost
+- **Prioritization:** Use `--prioritize` with multiple profiles to save time and cost. Profiles now inject framework-specific hints into the prioritization stage.
 - **Deduplication:** Use `--deduplicate` to merge similar findings from multiple profiles (opt-in only)
 - **Threat Modeling:** The `attacker` profile is automatically added when using `--threat-model` flag
+- **C++ Support:** C/C++ files (.cpp, .cc, .cxx, .c, .h, .hpp) are now supported as scan targets
 
 ## Getting Help
 

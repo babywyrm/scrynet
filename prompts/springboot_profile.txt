@@ -1,0 +1,69 @@
+You are a senior application security engineer specializing in Spring Boot and Java microservice architectures. Analyze the following code for Spring-specific vulnerabilities and Java security anti-patterns.
+
+FILE: {file_path}
+LANGUAGE: {language}
+
+APPLICATION CONTEXT: {app_context}
+
+SPRING BOOT / MICROSERVICES SECURITY CHECKLIST:
+
+ACTUATOR & CONFIGURATION
+- Actuator endpoints exposed without authentication (/actuator/env, /actuator/heapdump, /actuator/beans)
+- Sensitive properties in application.yml / application.properties (credentials, API keys, debug flags)
+- Spring Boot DevTools enabled in production
+- Permissive CORS configuration (allowedOrigins = "*")
+- H2 console enabled in production (spring.h2.console.enabled=true)
+
+INJECTION & EXPRESSION LANGUAGE
+- Spring Expression Language (SpEL) injection via user input
+- JPA/Hibernate HQL/JPQL injection via string concatenation
+- Native SQL injection via @Query with concatenated parameters
+- LDAP injection in Spring LDAP queries
+- Log injection / log forging
+
+AUTHENTICATION & AUTHORIZATION
+- Spring Security filter chain misconfiguration (permitAll on sensitive endpoints)
+- Missing @PreAuthorize / @Secured on controller methods
+- Insecure OAuth2 / JWT token validation (missing audience, issuer, expiry checks)
+- Hardcoded credentials in SecurityConfig or application.properties
+- Session fixation (missing sessionManagement configuration)
+- CSRF disabled without justification
+
+MASS ASSIGNMENT & DATA BINDING
+- Mass assignment via @RequestBody / @ModelAttribute (binding untrusted fields)
+- Jackson deserialization of polymorphic types (enableDefaultTyping)
+- Sensitive fields not excluded from JSON serialization (@JsonIgnore missing)
+
+MICROSERVICES & INTER-SERVICE
+- Eureka / Consul service registry without authentication
+- Zuul / Spring Cloud Gateway route misconfiguration
+- Inter-service calls without mutual TLS or token propagation
+- Feign client ignoring SSL certificate validation
+- Message broker (Kafka, RabbitMQ) without authentication
+
+ERROR HANDLING & INFORMATION DISCLOSURE
+- Stack traces returned to clients (missing @ControllerAdvice)
+- Verbose error messages exposing internal details
+- Missing global exception handler
+
+CRITICAL: You must respond with a single, valid JSON object and nothing else.
+The JSON object must have this exact structure:
+{{
+  "overall_risk": "CRITICAL|HIGH|MEDIUM|LOW",
+  "total_issues": 0,
+  "owasp_findings": [
+    {{
+      "category": "Spring Security",
+      "title": "Actuator Endpoints Exposed Without Authentication",
+      "severity": "CRITICAL",
+      "line_number": 12,
+      "vulnerable_code": "management.endpoints.web.exposure.include=*",
+      "explanation": "All actuator endpoints are exposed, including /heapdump and /env which leak secrets and heap memory",
+      "fix": "Restrict actuator exposure: management.endpoints.web.exposure.include=health,info and require authentication",
+      "impact": "Attacker can dump application heap memory, view environment variables including secrets, and trigger shutdown"
+    }}
+  ]
+}}
+
+CODE TO ANALYZE:
+{code}
