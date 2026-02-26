@@ -183,6 +183,36 @@ python3 smart_analyzer.py /path/to/ctf-challenge \\
 
 ---
 
+## Framework-Specific Profiles
+
+### Spring Boot / Java Microservices
+```bash
+python3 orchestrator.py ./spring-app ./scanner \\
+  --profile springboot,owasp \\
+  --prioritize --prioritize-top 25 \\
+  --question "find actuator exposure, SpEL injection, mass assignment"
+```
+
+### C++/Conan Native Code Security
+```bash
+python3 orchestrator.py ./cpp-project ./scanner \\
+  --profile cpp_conan \\
+  --prioritize --prioritize-top 30 \\
+  --question "find buffer overflows, use-after-free, format string bugs"
+```
+
+### Flask / Python Web Application
+```bash
+python3 orchestrator.py ./flask-app ./scanner \\
+  --profile flask,owasp \\
+  --prioritize --prioritize-top 20 \\
+  --question "find SSTI, SQLAlchemy injection, debug mode exposure"
+```
+
+**Available Profiles:** owasp, ctf, attacker, code_review, performance, modern, soc2, pci, compliance, springboot, cpp_conan, flask
+
+---
+
 ## Common Security Analysis Scenarios
 
 ### 1. Comprehensive Security Audit

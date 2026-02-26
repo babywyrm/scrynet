@@ -176,29 +176,39 @@ python3 orchestrator.py ./target-app ./scanner \
 
 ### Use Case 8: Framework-Specific Analysis
 
-**Scenario:** You know it's a Flask app, want Flask-specific findings.
+**Scenario:** You know the framework; use a dedicated profile for deeper findings.
 
+**Spring Boot / Java Microservices:**
 ```bash
-# Step 1: Detect tech stack
-python3 orchestrator.py ./flask-app --detect-tech-stack
-
-# Output shows: Flask, SQLAlchemy, gRPC detected
-
-# Step 2: Run framework-aware scan
-python3 orchestrator.py ./flask-app ./scanner \
-  --preset ctf \
-  --question "find Flask SSTI, SQLAlchemy injection, session security issues" \
-  --show-chains \
-  --top 10
-
-# AI now focuses on:
-#   - SSTI via Jinja2 templates
-#   - SQLAlchemy raw SQL injection
-#   - Flask session security
-#   - Debug mode detection
+python3 orchestrator.py ./spring-app ./scanner \
+  --profile springboot,owasp \
+  --prioritize --prioritize-top 25 \
+  --question "find actuator exposure, SpEL injection, and Spring Security misconfigs"
 ```
 
-**When to use:** Framework-specific audits, targeted analysis
+Focuses on: @RestController entry points, SecurityConfig, application.yml credentials, JPA injection, OAuth2/JWT flaws
+
+**C++ / Conan Native Code:**
+```bash
+python3 orchestrator.py ./cpp-project ./scanner \
+  --profile cpp_conan \
+  --prioritize --prioritize-top 30 \
+  --question "find buffer overflows, use-after-free, and format string bugs"
+```
+
+Focuses on: Memory safety (CWE-120/416/415), unsafe C functions, CMake FetchContent without hash pinning, Conan supply chain
+
+**Flask / Python Web App:**
+```bash
+python3 orchestrator.py ./flask-app ./scanner \
+  --profile flask,owasp \
+  --prioritize --prioritize-top 20 \
+  --question "find SSTI, SQLAlchemy injection, and debug mode exposure"
+```
+
+Focuses on: Jinja2 SSTI, app.run(debug=True), weak SECRET_KEY, SQLAlchemy raw SQL, unsafe file uploads, pickle deserialization
+
+**When to use:** Framework-specific audits. Profile-driven prioritization automatically surfaces the most relevant files for the selected framework.
 
 ---
 

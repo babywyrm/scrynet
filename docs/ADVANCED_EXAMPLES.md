@@ -481,6 +481,82 @@ python3 agentsmith.py hybrid ./test_targets/DVWA ./scanner \
 
 ---
 
+### Example: Spring Boot Microservice Audit
+
+**Scenario**: Deep security audit of a Spring Boot microservice with profile-driven prioritization
+
+```bash
+python3 agentsmith.py hybrid ./spring-microservice ./scanner \
+  --profile springboot,owasp,modern \
+  --prioritize \
+  --prioritize-top 25 \
+  --question "find actuator exposure, SpEL injection, mass assignment, and Spring Security misconfigs" \
+  --deduplicate \
+  --dedupe-threshold 0.75 \
+  --generate-payloads \
+  --annotate-code \
+  --top-n 10 \
+  --export-format json html markdown \
+  --output-dir ./spring-audit-reports \
+  --verbose
+```
+
+**What this does**:
+- Runs 3 profiles (Spring Boot, OWASP, Modern) with profile-driven prioritization
+- Prioritization automatically favors *Controller.java, SecurityConfig*, application.yml, *Repository.java
+- Generates payloads and annotations for top 10 findings
+- Exports in all formats
+
+### Example: C++/Conan Native Code Review
+
+**Scenario**: Memory safety audit of a C++ project with Conan dependencies
+
+```bash
+python3 agentsmith.py hybrid ./native-lib ./scanner \
+  --profile cpp_conan \
+  --prioritize \
+  --prioritize-top 30 \
+  --question "find buffer overflows, use-after-free, format string bugs, and unsafe C functions" \
+  --generate-payloads \
+  --annotate-code \
+  --top-n 15 \
+  --export-format json markdown \
+  --output-dir ./cpp-security-audit \
+  --verbose
+```
+
+**What this does**:
+- C++/Conan profile prioritizes parser/socket/buffer code, CMakeLists.txt, conanfile.py
+- Finds CWE-120 (buffer overflow), CWE-416 (use-after-free), CWE-134 (format string), CWE-190 (integer overflow)
+- Checks CMake FetchContent for unpinned dependencies
+- Generates exploitation payloads for memory corruption findings
+
+### Example: Flask Application Security Audit
+
+**Scenario**: Security review of a Flask web application
+
+```bash
+python3 agentsmith.py hybrid ./flask-webapp ./scanner \
+  --profile flask,owasp \
+  --prioritize \
+  --prioritize-top 20 \
+  --question "find SSTI, SQLAlchemy injection, debug mode, weak secret keys" \
+  --deduplicate \
+  --generate-payloads \
+  --annotate-code \
+  --top-n 10 \
+  --export-format json html \
+  --output-dir ./flask-audit \
+  --verbose
+```
+
+**What this does**:
+- Flask profile prioritizes app.py, routes/views, auth/login modules, config.py, templates
+- Finds Jinja2 SSTI, app.run(debug=True), hardcoded SECRET_KEY, SQLAlchemy raw SQL
+- OWASP profile catches generic issues; deduplication merges overlapping findings
+
+---
+
 ## Expected Output Analysis
 
 ### With Deduplication Enabled

@@ -43,6 +43,26 @@ try:
 except ImportError:
     readline = None  # Windows may not have readline
 
+# Known enum values for context-aware completion
+_PROFILE_NAMES = [
+    "owasp", "ctf", "attacker", "code_review", "performance", "modern",
+    "soc2", "pci", "compliance", "springboot", "cpp_conan", "flask",
+]
+_PRESET_NAMES = ["mcp", "quick", "ctf", "ctf-fast", "security-audit", "pentest", "compliance"]
+_SEVERITY_NAMES = ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
+_BOOL_NAMES = ["true", "false"]
+
+# Maps param name → known completions
+_PARAM_VALUE_COMPLETIONS: dict[str, list[str]] = {
+    "profile": _PROFILE_NAMES,
+    "preset": _PRESET_NAMES,
+    "severity": _SEVERITY_NAMES,
+    "generate_payloads": _BOOL_NAMES,
+    "annotate_code": _BOOL_NAMES,
+    "deduplicate": _BOOL_NAMES,
+    "verbose": _BOOL_NAMES,
+}
+
 
 def _drain_stdin() -> None:
     """If stdin is a TTY and has pending input, read and discard it so the next input() gets a clean line."""
@@ -1031,6 +1051,91 @@ async def _run_full_scan(session, tools: dict, repo_path: str, spinner: Spinner)
     return last
 
 
+def _parse_key_value_args(text: str) -> dict | None:
+    """Parse 'key=value key2=value2' into a dict. Returns None on failure."""
+    if not text or text.strip().startswith("{"):
+        return None
+    args = {}
+    for token in text.split():
+        if "=" not in token:
+            return None
+        key, _, val = token.partition("=")
+        if not key:
+            return None
+        if val.lower() in ("true", "yes"):
+            val = True
+        elif val.lower() in ("false", "no"):
+            val = False
+        else:
+            try:
+                val = int(val)
+            except ValueError:
+                pass
+        args[key] = val
+    return args if args else None
+
+
+def _build_completer(builtins: tuple, tools: dict):
+    """Build a context-aware completer for the MCP shell.
+
+    Completes:
+      - First word: tool names + builtin commands
+      - After tool name: param_name= for that tool's schema params
+      - After param_name=: known enum values (profiles, presets, severity, ...)
+    """
+    tool_schemas: dict[str, dict] = {}
+    for name, t in tools.items():
+        schema = t.inputSchema or {}
+        tool_schemas[name] = schema.get("properties", {})
+
+    first_word_list = sorted(set(builtins) | set(tools.keys()))
+
+    def _complete(text: str, state: int):
+        # param=value completion -- handle first so it works even when
+        # readline.get_line_buffer() is unreliable (libedit on macOS)
+        if "=" in text:
+            param, _, partial = text.partition("=")
+            values = list(_PARAM_VALUE_COMPLETIONS.get(param, []))
+            # Also try tool schema enums if we can identify the tool
+            if readline is not None:
+                buf = readline.get_line_buffer()
+                words = buf.lstrip().split()
+                if words and words[0] in tool_schemas:
+                    schema_prop = tool_schemas[words[0]].get(param, {})
+                    enum_vals = schema_prop.get("enum")
+                    if enum_vals and not values:
+                        values = [str(v) for v in enum_vals]
+            matches = [f"{param}={v} " for v in values if v.startswith(partial)]
+            return matches[state] if state < len(matches) else None
+
+        buf = ""
+        if readline is not None:
+            buf = readline.get_line_buffer()
+
+        words = buf.lstrip().split()
+        at_start = len(words) == 0 or (len(words) == 1 and not buf.endswith(" "))
+
+        if at_start:
+            matches = [m + " " for m in first_word_list if m.startswith(text)]
+            return matches[state] if state < len(matches) else None
+
+        tool_name = words[0]
+        props = tool_schemas.get(tool_name, {})
+
+        if props:
+            already_set = set()
+            for w in words[1:]:
+                if "=" in w:
+                    already_set.add(w.partition("=")[0])
+            available = [p for p in props if p not in already_set]
+            matches = [f"{p}=" for p in available if p.startswith(text)]
+            return matches[state] if state < len(matches) else None
+
+        return None
+
+    return _complete
+
+
 async def mode_interact(url: str, repo_path: str | None = None):
     """Interactive REPL for calling MCP tools."""
     repo_path = repo_path or _detect_repo_path()
@@ -1079,7 +1184,6 @@ async def mode_interact(url: str, repo_path: str | None = None):
             "annotations", "payloads", "everything", "verbose", "repo",
             "tools", "list_presets", "last", "status", "state", "dvmcp",
         )
-        _completion_list = sorted(set(_BUILTINS) | set(tools.keys()))
 
         DVMCP_CHALLENGES = [
             (1, "Basic Prompt Injection"),
@@ -1094,20 +1198,14 @@ async def mode_interact(url: str, repo_path: str | None = None):
             (10, "Multi-Vector Attack"),
         ]
 
-        def _complete(text: str, state: int):
-            if not text:
-                return None
-            matches = [m for m in _completion_list if m.startswith(text)]
-            return matches[state] if state < len(matches) else None
-
         if readline is not None:
-            readline.set_completer(_complete)
+            completer = _build_completer(_BUILTINS, tools)
+            readline.set_completer(completer)
             readline.set_completer_delims(" \t\n")
-            readline.parse_and_bind("tab: complete")
-            try:
-                readline.parse_and_bind(r"\C-i: complete")
-            except Exception:
-                pass
+            if "libedit" in (readline.__doc__ or ""):
+                readline.parse_and_bind("bind ^I rl_complete")
+            else:
+                readline.parse_and_bind("tab: complete")
 
         while True:
             try:
@@ -1125,33 +1223,55 @@ async def mode_interact(url: str, repo_path: str | None = None):
 
             if line == "help":
                 print(f"  {c('Commands:', BOLD)}")
-                print(f"    {c('scan', CYAN)}                  Run a complete scan (tech stack → static/hybrid → summary → findings)")
+                print(f"    {c('scan', CYAN)}                  Run a complete scan (tech stack -> static/hybrid -> summary -> findings)")
                 print(f"    {c('summary', CYAN)}               Summary + cost for last scan")
-                print(f"    {c('findings', CYAN)} [N|all]     Findings from last scan (default 20); shows source dir")
-                print(f"    {c('annotations', CYAN)}           Annotation files; verbose = full content of every file")
-                print(f"    {c('payloads', CYAN)}              Payload files; verbose = full JSON of every file")
-                print(f"    {c('everything', CYAN)}            Dump full run: summary + all findings + all annotations + all payloads)")
-                print(f"    {c('verbose', CYAN)}              Toggle verbose (no truncation; full content for annotations/payloads/findings)")
-                print(f"    {c('repo', CYAN)} [path]           Show or set default repo (e.g. repo /path/to/repo)")
-                print(f"    {c('tools', CYAN)}                 List available tools")
-                print(f"    {c('<tool_name>', CYAN)}           Call a tool (prompts for args)")
-                print(f"    {c('<tool_name> {json}', CYAN)}    Call with inline JSON args")
-                print(f"    {c('last', CYAN)}                  Show last result (full JSON)")
-                print(f"    {c('status', CYAN)} / {c('state', CYAN)}        Show session config (server, repo, verbose, last output)")
-                print(f"    {c('dvmcp', CYAN)}                 Scan all 10 DVMCP challenges (ports 9001–9010)")
-                print(f"    {c('help', CYAN)}                  Show this help")
-                print(f"    {c('quit', CYAN)}                  Exit (or Ctrl+C)")
+                print(f"    {c('findings', CYAN)} [N|all]      Findings from last scan (default 20)")
+                print(f"    {c('annotations', CYAN)}            Annotation files (verbose = full content)")
+                print(f"    {c('payloads', CYAN)}               Payload files (verbose = full JSON)")
+                print(f"    {c('everything', CYAN)}             Dump full run: summary + findings + annotations + payloads")
+                print(f"    {c('verbose', CYAN)}                Toggle verbose mode")
+                print(f"    {c('repo', CYAN)} [path]            Show or set default repo")
+                print(f"    {c('tools', CYAN)}                  List available tools")
+                print(f"    {c('<tool>', CYAN)} key=val ...     Call a tool with key=value args (tab-completes!)")
+                print(f"    {c('<tool>', CYAN)} {{json}}          Call a tool with inline JSON args")
+                print(f"    {c('<tool>', CYAN)}                  Call a tool (prompts for args)")
+                print(f"    {c('last', CYAN)}                   Show last result (full JSON)")
+                print(f"    {c('status', CYAN)}                  Show session config")
+                print(f"    {c('dvmcp', CYAN)}                  Scan all 10 DVMCP challenges")
+                print(f"    {c('quit', CYAN)}                   Exit (or Ctrl+C)")
+                print()
+                print(f"  {c('Tab completion:', BOLD)} tool names -> param names -> param values")
                 print(f"  {c('Long output', DIM)} is paged (less); set AGENTSMITH_MCP_NOPAGER=1 to disable.")
-                print(f"  {c('Progress', DIM)}: tail -f .mcp_server.log in another terminal to see API calls live.")
                 print()
                 print(f"  {c('Examples:', BOLD)}")
-                print(f'    scan_static {{"severity": "HIGH"}}   # repo_path auto-filled')
-                print(f'    scan_hybrid {{"preset": "mcp"}}              # 2 files, ~1 min')
-                print(f'    scan_hybrid {{"preset": "quick"}}             # 10 files')
-                print(f'    scan_mcp 9001   or   scan_mcp {{"target_url": "http://localhost:9001/sse"}}')
-                print(f'    dvmcp                     # sweep all 10 DVMCP challenges')
-                print(f'    summary')
-                print(f'    findings 50')
+                print()
+                print(f"  {c('# Static scan (free, no API key)', DIM)}")
+                print(f'    scan_static severity=HIGH')
+                print()
+                print(f"  {c('# Hybrid AI scan with presets', DIM)}")
+                print(f'    scan_hybrid preset=mcp                          {c("# 2 files, ~1 min", DIM)}')
+                print(f'    scan_hybrid preset=quick                        {c("# 10 files, ~1 min", DIM)}')
+                print(f'    scan_hybrid preset=ctf                          {c("# 15 files, payloads", DIM)}')
+                print()
+                print(f"  {c('# Framework-specific profiles', DIM)}")
+                print(f'    scan_hybrid profile=springboot                  {c("# Spring Boot/Java microservices", DIM)}')
+                print(f'    scan_hybrid profile=flask                       {c("# Flask/Python web apps", DIM)}')
+                print(f'    scan_hybrid profile=cpp_conan                   {c("# C++/Conan memory safety", DIM)}')
+                print(f'    scan_hybrid profile=springboot,owasp            {c("# combine profiles", DIM)}')
+                print()
+                print(f"  {c('# Custom scan', DIM)}")
+                print(f'    scan_hybrid profile=owasp prioritize_top=20 question="find SQL injection"')
+                print()
+                print(f"  {c('# MCP server scanning', DIM)}")
+                print(f'    scan_mcp 9001                                   {c("# scan localhost:9001", DIM)}')
+                print(f'    dvmcp                                           {c("# sweep all 10 DVMCP challenges", DIM)}')
+                print()
+                print(f"  {c('# After a scan', DIM)}")
+                print(f'    summary                                         {c("# cost + severity breakdown", DIM)}')
+                print(f'    findings 50                                     {c("# top 50 findings", DIM)}')
+                print()
+                print(f"  {c('Available profiles:', DIM)} {', '.join(_PROFILE_NAMES)}")
+                print(f"  {c('Available presets:', DIM)}  {', '.join(_PRESET_NAMES)}")
                 print()
                 continue
 
@@ -1521,8 +1641,14 @@ async def mode_interact(url: str, repo_path: str | None = None):
                     try:
                         args = json.loads(inline_args)
                     except json.JSONDecodeError:
-                        print(f"  {c('Invalid JSON', RED)}: {inline_args}")
-                        continue
+                        kv = _parse_key_value_args(inline_args)
+                        if kv is not None:
+                            args = kv
+                        else:
+                            print(f"  {c('Invalid args', RED)}: {inline_args}")
+                            print(f"  Use JSON: {c('scan_hybrid {\"profile\": \"springboot\"}', CYAN)}")
+                            print(f"  Or key=value: {c('scan_hybrid profile=springboot preset=quick', CYAN)}")
+                            continue
                 if "repo_path" not in args and repo_path and tool_name in ("scan_hybrid", "scan_static", "detect_tech_stack"):
                     args["repo_path"] = repo_path
                     print(f"  {c('(using default repo_path)', DIM)}")

@@ -24,12 +24,14 @@
 - **Auto-loaded Rules**: 70+ OWASP rules from `rules/`; tech-stack-aware (Node/Python rules when detected)
 - **Preset System**: 7 optimized presets for common workflows (`--preset mcp`, `--preset ctf`, `--preset pentest`, etc.)
 - **Smart Defaults**: Auto-prioritization, auto-deduplication, and smart top-n
+- **Framework Profiles**: Spring Boot, C++/Conan, and Flask-specific security profiles with profile-driven prioritization
+- **C/C++ Support**: Full scanning support for .cpp, .cc, .cxx, .c, .h, .hpp files with CMake/Conan/vcpkg detection
 
 ## Features
 
 ### Core Capabilities
 
-- **Multi-Language Support**: Go, JavaScript, Python, Java, PHP, HTML, YAML, Helm templates
+- **Multi-Language Support**: Go, JavaScript, Python, Java, C/C++, PHP, HTML, YAML, Helm templates
 - **Multiple Scanning Modes**: Static-only, AI-powered analysis, CTF-focused, and hybrid
 - **OWASP Top 10 Coverage**: 70+ security rules across 5 rule files
 - **AI-Powered Analysis**: Claude AI integration for contextual vulnerability detection
@@ -207,7 +209,7 @@ python3 orchestrator.py /path/to/repo ./scanner \
 - **Multiple Export Formats**: JSON, CSV, Markdown, HTML
 
 **Key Options:**
-- `--profile`: AI analysis profiles (comma-separated, default: owasp)
+- `--profile`: AI analysis profiles (comma-separated, default: owasp). Framework profiles: springboot, cpp_conan, flask
 - `--preset`: Use a preset configuration (mcp, quick, ctf, ctf-fast, security-audit, pentest, compliance)
 - `--prioritize`: Enable AI prioritization (HIGHLY RECOMMENDED for 50+ files)
 - `--prioritize-top N`: Number of files to prioritize (default: 15)
@@ -632,7 +634,7 @@ python3 -m mcp_server --port 2266
 | Tool | Description |
 |------|-------------|
 | `scan_static` | Static analysis with 70+ OWASP rules (no API key needed) |
-| `scan_hybrid` | Full hybrid scan: static + AI analysis |
+| `scan_hybrid` | Full hybrid scan: static + AI analysis (supports framework profiles: springboot, cpp_conan, flask) |
 | `detect_tech_stack` | Detect languages, frameworks, and security risks |
 | `summarize_results` | Summarize existing scan output |
 | `list_findings` | Get findings filtered by severity/source |

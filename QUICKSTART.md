@@ -96,6 +96,23 @@ Large codebases, interrupted scans
 
 ---
 
+### Framework-Specific Scans
+
+```bash
+# Spring Boot / Java microservices
+python3 orchestrator.py ./spring-app ./scanner --profile springboot,owasp --prioritize --prioritize-top 25
+
+# C++ / Conan native code (memory safety, supply-chain)
+python3 orchestrator.py ./cpp-project ./scanner --profile cpp_conan --prioritize --prioritize-top 30
+
+# Flask / Python web app (SSTI, SQLAlchemy, debug mode)
+python3 orchestrator.py ./flask-app ./scanner --profile flask,owasp --prioritize --prioritize-top 20
+```
+
+~3-10 min · Profile-specific prioritization automatically guides file selection
+
+---
+
 ## MCP Shell Use Cases
 
 Start the interactive shell:
@@ -109,7 +126,8 @@ At the `mcp>` prompt:
 ### 9. Hybrid scan (static + AI)
 
 ```
-mcp> scan_hybrid {"preset": "mcp"}
+mcp> scan_hybrid preset=mcp
+mcp> scan_hybrid profile=springboot preset=quick
 ```
 
 2 files · ~1 min · Good for Cursor/IDE integration

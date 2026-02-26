@@ -227,7 +227,7 @@ TOOL_DEFINITIONS = [
                 },
                 "profile": {
                     "type": "string",
-                    "description": "AI analysis profile (default: owasp). Options: owasp, ctf, code_review, modern, attacker, soc2, pci, compliance, performance",
+                    "description": "AI analysis profile (default: owasp). Options: owasp, ctf, code_review, modern, attacker, soc2, pci, compliance, performance, springboot, cpp_conan, flask",
                     "default": "owasp",
                 },
                 "preset": {
