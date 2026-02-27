@@ -98,22 +98,29 @@ Type `5` to analyze only 5 files (faster, cheaper)
 
 ---
 
-### Use Case 5: Targeted Vulnerability Hunt
+### Use Case 5: Targeted Vulnerability Hunt (prioritize_top + top_n)
 
-**Scenario:** You suspect SQL injection in a specific module.
+**Scenario:** You suspect SQL injection in a specific module. Use both options for full control.
+
+- **prioritize_top** = FILES: How many files the AI analyzes (lower=faster).
+- **top_n** = FINDINGS: How many findings get payloads/annotations (default 5, max 20).
 
 ```bash
-python3 orchestrator.py ./webapp/api ./scanner \
-  --preset ctf \
-  --prioritize-top 10 \
+python3 agentsmith.py hybrid ./webapp/api ./scanner \
+  --profile owasp \
+  --prioritize --prioritize-top 10 \
   --question "find SQL injection in database queries and API endpoints" \
   --show-chains \
-  --top 8
+  --generate-payloads --annotate-code --top-n 8
 
+# prioritize_top=10 → AI analyzes 10 files
+# top_n=8 → 8 findings get payloads + annotations
 # Takes: ~2-3 minutes
-# Focuses on: SQL injection patterns
-# Prioritizes: Database and API files
-# Shows: Complete attack chains
+```
+
+**MCP equivalent:**
+```
+mcp> scan_hybrid profile=owasp prioritize_top=10 top_n=8 question="find SQL injection" generate_payloads=true annotate_code=true
 ```
 
 **When to use:** Focused security assessment, specific vulnerability types

@@ -43,12 +43,34 @@ try:
 except ImportError:
     readline = None  # Windows may not have readline
 
-# Known enum values for context-aware completion
-_PROFILE_NAMES = [
-    "owasp", "ctf", "attacker", "code_review", "performance", "modern",
-    "soc2", "pci", "compliance", "springboot", "cpp_conan", "flask",
-]
-_PRESET_NAMES = ["mcp", "quick", "ctf", "ctf-fast", "security-audit", "pentest", "compliance"]
+# Known enum values for context-aware completion (derived from config when possible)
+def _get_profile_names() -> list[str]:
+    """Get profile names from profile_metadata (single source of truth)."""
+    try:
+        _proj = Path(__file__).resolve().parent.parent
+        if str(_proj) not in sys.path:
+            sys.path.insert(0, str(_proj))
+        from lib.profile_metadata import get_all_profiles
+        return sorted(get_all_profiles().keys())
+    except Exception:
+        return ["owasp", "ctf", "attacker", "code_review", "performance", "modern",
+                "soc2", "pci", "compliance", "springboot", "cpp_conan", "flask"]
+
+
+def _get_preset_names() -> list[str]:
+    """Get preset names from config (single source of truth)."""
+    try:
+        _proj = Path(__file__).resolve().parent.parent
+        if str(_proj) not in sys.path:
+            sys.path.insert(0, str(_proj))
+        from lib.config import list_presets
+        return [p.name for p in list_presets()]
+    except Exception:
+        return ["mcp", "quick", "ctf", "ctf-fast", "security-audit", "pentest", "compliance"]
+
+
+_PROFILE_NAMES = _get_profile_names()
+_PRESET_NAMES = _get_preset_names()
 _SEVERITY_NAMES = ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
 _BOOL_NAMES = ["true", "false"]
 
@@ -58,6 +80,7 @@ _PARAM_VALUE_COMPLETIONS: dict[str, list[str]] = {
     "preset": _PRESET_NAMES,
     "severity": _SEVERITY_NAMES,
     "generate_payloads": _BOOL_NAMES,
+    "annotate_code": _BOOL_NAMES,
     "annotate_code": _BOOL_NAMES,
     "deduplicate": _BOOL_NAMES,
     "verbose": _BOOL_NAMES,
@@ -676,8 +699,20 @@ def _build_test_cases(repo_path, tool_filter, include_all, available_tools):
 # Result detail printing (always shown unless --quiet)
 # ---------------------------------------------------------------------------
 
-def _print_result_detail(tool_name: str, data: dict, *, verbose: bool = False):
-    """Print detailed, informative result for each tool."""
+def _print_result_detail(tool_name: str, data: dict | None, *, verbose: bool = False):
+    """Print detailed, informative result for each tool. Handles None/malformed data."""
+    if data is None:
+        print(f"    {c('(no data)', DIM)}")
+        return
+    if not isinstance(data, dict):
+        print(f"    {c('(unexpected response type)', DIM)}")
+        return
+    # Show error first if present (scan_hybrid, etc.)
+    if data.get("error"):
+        print(f"    {c('Error:', RED)} {data['error']}")
+        if data.get("stderr"):
+            for line in str(data["stderr"]).splitlines()[-5:]:
+                print(f"      {c(line[:100], DIM)}")
     if data.get("debug_log"):
         n_lines = 60 if verbose else 25
         lines = data["debug_log"].splitlines()[-n_lines:]
@@ -692,11 +727,11 @@ def _print_result_detail(tool_name: str, data: dict, *, verbose: bool = False):
             print(f"      {c(p['name'], CYAN):>20}: {p.get('description', '')[:55]}")
 
     elif tool_name == "summarize_results":
-        combined = data.get("combined", {})
-        cost = data.get("cost", {})
-        static = data.get("static", {})
-        ai = data.get("ai", {})
-        artifacts = data.get("artifacts", {})
+        combined = data.get("combined") or {}
+        cost = data.get("cost") or {}
+        static = data.get("static") or {}
+        ai = data.get("ai") or {}
+        artifacts = data.get("artifacts") or {}
 
         print(f"    {c('Findings:', BOLD)}")
         print(f"      Static:     {static.get('count', 0)}")
@@ -777,13 +812,21 @@ def _print_result_detail(tool_name: str, data: dict, *, verbose: bool = False):
             print(f"      {c(f'... and {returned - cap} more', DIM)}")
 
     elif tool_name == "detect_tech_stack":
-        langs = data.get("languages", [])
+        langs = data.get("languages") or []
         if isinstance(langs, dict):
             langs = list(langs.keys())
-        fws = data.get("frameworks", {})
-        entries = data.get("entry_points", [])
-        sec_files = data.get("security_critical_files", data.get("security_files", []))
-        risks = data.get("framework_specific_risks", data.get("risks", []))
+        elif not isinstance(langs, list):
+            langs = []
+        fws = data.get("frameworks") or {}
+        entries = data.get("entry_points") or []
+        sec_files = data.get("security_critical_files") or data.get("security_files") or []
+        risks = data.get("framework_specific_risks") or data.get("risks") or []
+        if not isinstance(entries, list):
+            entries = []
+        if not isinstance(sec_files, list):
+            sec_files = []
+        if not isinstance(risks, list):
+            risks = []
 
         cap_fw = 50 if verbose else 8
         cap_ep = 50 if verbose else 5
@@ -1228,56 +1271,66 @@ async def mode_interact(url: str, repo_path: str | None = None):
                 break
 
             if line == "help":
-                print(f"  {c('Commands:', BOLD)}")
-                print(f"    {c('scan', CYAN)}                  Run a complete scan (tech stack -> static/hybrid -> summary -> findings)")
-                print(f"    {c('summary', CYAN)}               Summary + cost for last scan")
-                print(f"    {c('findings', CYAN)} [N|all]      Findings from last scan (default 20)")
-                print(f"    {c('annotations', CYAN)}            Annotation files (verbose = full content)")
-                print(f"    {c('payloads', CYAN)}               Payload files (verbose = full JSON)")
-                print(f"    {c('everything', CYAN)}             Dump full run: summary + findings + annotations + payloads")
-                print(f"    {c('verbose', CYAN)}                Toggle verbose mode")
-                print(f"    {c('repo', CYAN)} [path]            Show or set default repo")
-                print(f"    {c('tools', CYAN)}                  List available tools")
-                print(f"    {c('<tool>', CYAN)} key=val ...     Call a tool with key=value args (tab-completes!)")
-                print(f"    {c('<tool>', CYAN)} {{json}}          Call a tool with inline JSON args")
-                print(f"    {c('<tool>', CYAN)}                  Call a tool (prompts for args)")
-                print(f"    {c('last', CYAN)}                   Show last result (full JSON)")
-                print(f"    {c('status', CYAN)}                  Show session config")
-                print(f"    {c('dvmcp', CYAN)}                  Scan all 10 DVMCP challenges")
-                print(f"    {c('quit', CYAN)}                   Exit (or Ctrl+C)")
                 print()
-                print(f"  {c('Tab completion:', BOLD)} tool names -> param names -> param values")
-                print(f"  {c('Long output', DIM)} is paged (less); set AGENTSMITH_MCP_NOPAGER=1 to disable.")
+                print(f"  {c('COMMANDS', BOLD)}")
+                print(f"  ─────────────────────────────────────────────────────────────────────")
+                print(f"    scan              Full scan (tech stack → static/hybrid → summary → findings)")
+                print(f"    summary           Cost + severity breakdown for last scan")
+                print(f"    findings [N|all]  List findings (default 20, or N, or all)")
+                print(f"    annotations       Annotation files (verbose = full content)")
+                print(f"    payloads          Payload JSON files (verbose = full content)")
+                print(f"    everything        Dump summary + findings + annotations + payloads")
+                print(f"    verbose           Toggle verbose mode")
+                print(f"    repo [path]       Show or set default repo")
+                print(f"    tools             List available tools")
+                print(f"    <tool> k=v ...    Call tool with key=value (tab-completes; use quotes for multi-word values)")
+                print(f"    last              Show last result (raw JSON)")
+                print(f"    status            Session config")
+                print(f"    dvmcp             Scan all 10 DVMCP challenges")
+                print(f"    quit              Exit")
                 print()
-                print(f"  {c('Examples:', BOLD)}")
+                print(f"  {c('PRIORITIZE_TOP vs TOP_N', BOLD)}")
+                print(f"  ─────────────────────────────────────────────────────────────────────")
+                print(f"    prioritize_top    FILES: AI picks this many files to deep-dive. Lower=faster.")
+                print(f"    top_n             FINDINGS: How many get payloads+annotations (default 5, max 20).")
+                print(f"    question          Guides file selection (e.g. question=\"find SQL injection\")")
+                print(f"    Pipeline: static → AI picks prioritize_top files → analyzes → top_n get payloads")
                 print()
-                print(f"  {c('# Static scan (free, no API key)', DIM)}")
+                print(f"  {c('EXAMPLE OUTPUT', BOLD)}")
+                print(f"  ─────────────────────────────────────────────────────────────────────")
+                print(f"    summary     → Static 12, AI 8, Combined 18 | Cost $0.02 | Payloads 5, Annotations 5")
+                print(f"    findings 10 → [CRITICAL] SQL injection login.php:42 | [HIGH] XSS search.php:18")
+                print(f"    annotations → login.php.md, search.php.md (FLAW/FIX comments)")
+                print(f"    payloads    → finding_001.json (red_team + blue_team)")
+                print()
+                print(f"  {c('SCAN EXAMPLES', BOLD)}")
+                print(f"  ─────────────────────────────────────────────────────────────────────")
+                print()
+                print(f"    {c('Static (free, no API key)', DIM)}")
                 print(f'    scan_static severity=HIGH')
                 print()
-                print(f"  {c('# Hybrid AI scan with presets', DIM)}")
-                print(f'    scan_hybrid preset=mcp                          {c("# 2 files, ~1 min", DIM)}')
-                print(f'    scan_hybrid preset=quick                        {c("# 10 files, ~1 min", DIM)}')
-                print(f'    scan_hybrid preset=ctf                          {c("# 15 files, payloads", DIM)}')
+                print(f"    {c('Both options: 8 files, 6 payloads (~2 min)', DIM)}")
+                print(f'    scan_hybrid profile=owasp prioritize_top=8 top_n=6 question="find SQL injection and XSS" generate_payloads=true annotate_code=true')
                 print()
-                print(f"  {c('# Framework-specific profiles', DIM)}")
-                print(f'    scan_hybrid profile=springboot                  {c("# Spring Boot/Java microservices", DIM)}')
-                print(f'    scan_hybrid profile=flask                       {c("# Flask/Python web apps", DIM)}')
-                print(f'    scan_hybrid profile=cpp_conan                   {c("# C++/Conan memory safety", DIM)}')
-                print(f'    scan_hybrid profile=springboot,owasp            {c("# combine profiles", DIM)}')
+                print(f"    {c('Fast: 2 files, 5 payloads (~1 min)', DIM)}")
+                print(f'    scan_hybrid preset=mcp generate_payloads=true annotate_code=true top_n=5')
                 print()
-                print(f"  {c('# Custom scan', DIM)}")
-                print(f'    scan_hybrid profile=owasp prioritize_top=20 question="find SQL injection"')
+                print(f"    {c('Medium: 5 files, 8 payloads (~2 min)', DIM)}")
+                print(f'    scan_hybrid profile=owasp prioritize_top=5 top_n=8 question="find SQL injection" generate_payloads=true annotate_code=true')
                 print()
-                print(f"  {c('# MCP server scanning', DIM)}")
-                print(f'    scan_mcp 9001                                   {c("# scan localhost:9001", DIM)}')
-                print(f'    dvmcp                                           {c("# sweep all 10 DVMCP challenges", DIM)}')
+                print(f"    {c('Thorough: 15 files, 10 payloads (~4 min)', DIM)}")
+                print(f'    scan_hybrid preset=ctf generate_payloads=true annotate_code=true top_n=10')
                 print()
-                print(f"  {c('# After a scan', DIM)}")
-                print(f'    summary                                         {c("# cost + severity breakdown", DIM)}')
-                print(f'    findings 50                                     {c("# top 50 findings", DIM)}')
+                print(f"    {c('Framework (tune prioritize_top for repo size)', DIM)}")
+                print(f'    scan_hybrid profile=springboot prioritize_top=6 top_n=5 question="find actuator exposure" generate_payloads=true annotate_code=true')
+                print(f'    scan_hybrid profile=flask prioritize_top=5 top_n=5 question="find SSTI" generate_payloads=true annotate_code=true')
                 print()
-                print(f"  {c('Available profiles:', DIM)} {', '.join(_PROFILE_NAMES)}")
-                print(f"  {c('Available presets:', DIM)}  {', '.join(_PRESET_NAMES)}")
+                print(f"    {c('MCP server scanning', DIM)}")
+                print(f'    scan_mcp 9001')
+                print(f'    dvmcp')
+                print()
+                print(f"  {c('Profiles:', DIM)} {', '.join(_PROFILE_NAMES)}")
+                print(f"  {c('Presets:', DIM)}  {', '.join(_PRESET_NAMES)}")
                 print()
                 continue
 
@@ -1345,7 +1398,8 @@ async def mode_interact(url: str, repo_path: str | None = None):
                     limit = 500
                 elif rest.isdigit():
                     limit = min(int(rest), 500)
-                args = {"severity": "CRITICAL", "limit": limit}
+                # Default MEDIUM+ so users see findings when repo has no CRITICAL
+                args = {"severity": "MEDIUM", "limit": limit}
                 if last_output_dir:
                     args["output_dir"] = last_output_dir
                 else:

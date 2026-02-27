@@ -1734,7 +1734,7 @@ def _print_profile_list(console: Console) -> None:
     
     profiles_by_category = list_profiles_by_category()
     
-    for category_name in ["security", "compliance", "code_quality"]:
+    for category_name in ["security", "compliance", "code_quality", "framework"]:
         if category_name not in profiles_by_category:
             continue
             

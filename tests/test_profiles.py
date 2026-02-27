@@ -22,8 +22,9 @@ class TestProfiles(unittest.TestCase):
         """Set up test fixtures."""
         self.prompts_dir = Path(__file__).parent.parent / "prompts"
         self.expected_profiles = [
-            "owasp", "ctf", "code_review", "modern", 
-            "soc2", "pci", "compliance", "performance", "attacker"
+            "owasp", "ctf", "code_review", "modern",
+            "soc2", "pci", "compliance", "performance", "attacker",
+            "springboot", "cpp_conan", "flask",  # framework profiles
         ]
     
     def test_all_profile_files_exist(self):

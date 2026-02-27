@@ -355,7 +355,7 @@ The library is designed to be a drop-in replacement for the existing `ReviewStat
 
 ## Example: Full Review Session
 
-See `agentsmith_context_example.py` for a complete working example.
+See `tests/agentsmith_context_example.py` for a complete working example.
 
 ## License
 

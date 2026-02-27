@@ -121,7 +121,9 @@ Start the interactive shell:
 ./scripts/run_mcp_shell.sh
 ```
 
-At the `mcp>` prompt:
+At the `mcp>` prompt, type `help` for full reference.
+
+**prioritize_top vs top_n:** `prioritize_top` = how many FILES the AI analyzes. `top_n` = how many FINDINGS get payloads/annotations. Use both for full control.
 
 ### 9. Hybrid scan (static + AI)
 
@@ -132,9 +134,15 @@ mcp> scan_hybrid profile=springboot preset=quick
 
 2 files · ~1 min · Good for Cursor/IDE integration
 
----
+### 10. Both options: prioritize_top + top_n
 
-### 10. Static scan only (no API key)
+```
+mcp> scan_hybrid profile=owasp prioritize_top=8 top_n=6 question="find SQL injection and XSS" generate_payloads=true annotate_code=true
+```
+
+8 files analyzed · 6 payloads/annotations · ~2 min · Custom focus
+
+### 11. Static scan only (no API key)
 
 ```
 mcp> scan_static
@@ -142,26 +150,26 @@ mcp> scan_static
 
 Uses default repo. Fast, free.
 
----
-
-### 11. Scan another MCP server
+### 12. Scan another MCP server
 
 ```
-mcp> scan_mcp {"target_url": "http://localhost:9001/sse"}
+mcp> scan_mcp 9001
+mcp> dvmcp
 ```
 
-DVMCP, or audit any MCP server. Type `scan_mcp` alone to be prompted for URL.
+DVMCP, or audit any MCP server.
 
----
-
-### 12. List findings & summary
+### 13. After a scan
 
 ```
 mcp> summary
 mcp> findings 20
+mcp> annotations
+mcp> payloads
+mcp> everything
 ```
 
-After a scan: severity counts, cost, top N findings.
+Severity counts, cost, findings, annotation files, payload JSON.
 
 ---
 

@@ -2,6 +2,32 @@
 
 Profiles customize the AI analysis to focus on specific security domains, compliance requirements, or code quality aspects. Each profile uses specialized prompts tailored to its domain.
 
+## Prioritization & Top Hits
+
+Two options control scan depth and output:
+
+| Option | Controls | Purpose |
+|--------|----------|---------|
+| **prioritize_top** | FILES | How many files the AI analyzes. AI picks the most relevant to your question. Lower = faster, cheaper. |
+| **top_n** | FINDINGS | How many findings get payloads + annotations. Default 5, max 20. Only applies when `--generate-payloads` or `--annotate-code` is set. |
+
+**Pipeline:** Static scan → AI picks `prioritize_top` files → AI analyzes them → `top_n` highest-severity findings get payloads/annotations.
+
+**Example (both options):**
+```bash
+python3 agentsmith.py hybrid ./webapp ./scanner \
+  --profile owasp \
+  --prioritize --prioritize-top 8 \
+  --question "find SQL injection and XSS" \
+  --generate-payloads --annotate-code --top-n 6
+```
+8 files analyzed · 6 payloads/annotations · ~2 min
+
+**MCP equivalent:**
+```
+mcp> scan_hybrid profile=owasp prioritize_top=8 top_n=6 question="find SQL injection and XSS" generate_payloads=true annotate_code=true
+```
+
 ## Listing All Profiles
 
 To see all available profiles with descriptions and use cases:

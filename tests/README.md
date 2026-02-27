@@ -4,29 +4,26 @@ Python test suite for Agent Smith core functionality.
 
 ## Running Tests
 
-### Quick Test
+### Recommended (pytest)
+```bash
+./scripts/run_tests.sh              # Run pytest (uses .venv, excludes test_targets)
+./scripts/run_tests.sh -v            # Verbose
+./scripts/run_tests.sh --all         # Include test_targets (pip install requests first)
+```
+
+Or directly: `python3 -m pytest tests/ mcp_attack/tests/ -v --ignore=tests/test_targets`
+
+### Quick Import Check
 ```bash
 source scripts/activate.sh
 python3 tests/test_imports.py
 ```
 
-### All Tests
+### Specific Test Files (pytest)
 ```bash
-python3 -m unittest discover tests -v
-```
-
-### Specific Test Files
-```bash
-python3 -m unittest tests.test_common -v
-python3 -m unittest tests.test_orchestrator -v
-python3 -m unittest tests.test_profiles -v
-python3 -m unittest tests.test_integration -v
-```
-
-### Specific Test Classes
-```bash
-python3 -m unittest tests.test_common.TestNormalizeFinding -v
-python3 -m unittest tests.test_integration.TestNormalizationIntegration -v
+python3 -m pytest tests/test_common.py -v
+python3 -m pytest tests/test_orchestrator.py -v
+python3 -m pytest tests/test_profiles.py -v
 ```
 
 ## Test Files

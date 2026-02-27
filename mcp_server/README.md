@@ -188,17 +188,21 @@ When in `interact` mode, type `help` at the `mcp>` prompt for the full list. Qui
 | Command | Description |
 |---------|-------------|
 | `scan_static` | Static scan (repo auto-filled) |
-| `scan_hybrid` | Hybrid scan; use `{"preset": "mcp"}` for 2 files (~1 min) |
+| `scan_hybrid` | Hybrid scan. Use key=value: `preset=mcp`, `prioritize_top=8 top_n=6`, `question="find SQL injection"` |
 | `summary` | Summarize last scan (severity counts, cost, artifacts) |
 | `findings [N]` | List findings from last scan (default 20) |
-| `annotations` | Show annotations from last scan |
-| `payloads` | Show payload files from last scan |
-| `scan_mcp` or `scan_mcp {"target_url": "..."}` | Security-scan a remote MCP server (prompts for URL if omitted) |
+| `annotations` | Show annotation files from last scan |
+| `payloads` | Show payload JSON files from last scan |
+| `everything` | Dump summary + findings + annotations + payloads |
+| `scan_mcp 9001` | Security-scan MCP server on port 9001 |
+| `dvmcp` | Scan all 10 DVMCP challenges |
 | `verbose` | Toggle verbose output (no truncation) |
 | `repo [path]` | Show or set default repo |
 | `status` | Show session config (server, repo, last output dir) |
 | `last` | Show last result as full JSON |
 | `quit` | Exit |
+
+**prioritize_top vs top_n:** `prioritize_top` = files to analyze. `top_n` = findings that get payloads/annotations. Example: `scan_hybrid profile=owasp prioritize_top=8 top_n=6 question="find SQL injection" generate_payloads=true annotate_code=true`
 
 ### Scan MCP Servers from the Shell
 

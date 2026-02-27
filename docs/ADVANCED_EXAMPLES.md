@@ -2,7 +2,9 @@
 
 Comprehensive examples demonstrating multi-profile scans, deduplication, and advanced workflows.
 
-**See also:** [USE_CASES.md](USE_CASES.md) (simple to complex) · [MCP_SCANNING.md](MCP_SCANNING.md) (scan MCP servers)
+**See also:** [USE_CASES.md](USE_CASES.md) (simple to complex) · [MCP_SCANNING.md](MCP_SCANNING.md) (scan MCP servers) · [PROFILES.md](PROFILES.md) (prioritization & profiles)
+
+**Prioritization:** `--prioritize-top N` = files to analyze. `--top-n N` = findings that get payloads/annotations (default 5, max 20). Pipeline: static scan → AI picks top N files → AI analyzes → top_n findings get payloads/annotations.
 
 **⚠️ Note: Deduplication is OPT-IN only!**
 

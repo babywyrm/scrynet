@@ -1,6 +1,6 @@
 # Review State and Cache
 
-> **Note**: Implementation in `lib/agentsmith_context.py`; used by `smart_analyzer.py` and `ctf_analyzer.py`.
+> **Note**: Implementation in `lib/agentsmith_context.py`; used by `agentsmith.py analyze` and `agentsmith.py ctf`.
 
 This guide explains how to preserve context across sessions, resume prior reviews, and manage the cache system.
 
@@ -17,10 +17,7 @@ This guide explains how to preserve context across sessions, resume prior review
 1) Start a review with state tracking
 
 ```bash
-# Using smart_analyzer.py
-python3 smart_analyzer.py /path/to/repo "your question" --enable-review-state
-
-# Or using agentsmith.py analyze mode
+# Using agentsmith.py analyze mode (recommended)
 python3 agentsmith.py analyze /path/to/repo "your question" --enable-review-state
 
 # Store cache in target repo (portable, survives cd)
@@ -31,11 +28,11 @@ python3 agentsmith.py analyze /path/to/repo "your question" --enable-review-stat
 
 - By ID:
 ```bash
-python3 smart_analyzer.py /path/to/repo --resume-review <review_id>
+python3 agentsmith.py analyze /path/to/repo --resume-review <review_id>
 ```
 - Auto-detect by directory (same repo structure):
 ```bash
-python3 smart_analyzer.py /path/to/repo "your question" --enable-review-state
+python3 agentsmith.py analyze /path/to/repo "your question" --enable-review-state
 # If a matching review exists, you'll be prompted to resume
 ```
 
@@ -43,10 +40,7 @@ python3 smart_analyzer.py /path/to/repo "your question" --enable-review-state
 
 ```bash
 # List available reviews (most recent first)
-python3 smart_analyzer.py . --list-reviews
-
-# Show status of a specific review
-python3 smart_analyzer.py . --review-status <review_id>
+python3 agentsmith.py analyze . --list-reviews
 ```
 
 4) Open the saved context in your editor
@@ -92,20 +86,13 @@ All commands exit after performing the requested action.
 
 ```bash
 # Show cache statistics
-python3 smart_analyzer.py . --cache-info
-
-# List recent cache entries
-python3 smart_analyzer.py . --cache-list
-
-# Prune entries older than N days
-python3 smart_analyzer.py . --cache-prune 14
+python3 agentsmith.py analyze . --cache-info
 
 # Clear all cache entries
-python3 smart_analyzer.py . --cache-clear
-
-# Export a manifest (paths + content preview) to a JSON file
-python3 smart_analyzer.py . --cache-export cache_manifest.json
+python3 agentsmith.py analyze . --cache-clear
 ```
+
+For prune, list, and export: use `python3 smart_analyzer.py . --cache-prune 14`, `--cache-list`, `--cache-export`.
 
 ### Storage options
 - **Default**: `.agentsmith_cache/` in current working directory
@@ -122,37 +109,34 @@ python3 smart_analyzer.py . --cache-export cache_manifest.json
 
 1) Populate cache & create a review
 ```bash
-python3 smart_analyzer.py /path/to/repo "security quick pass" --enable-review-state
+python3 agentsmith.py analyze /path/to/repo "security quick pass" --enable-review-state
 ```
 Expect: analysis runs; Review ID printed; cache dir created.
 
 2) Verify review exists
 ```bash
-python3 smart_analyzer.py . --list-reviews
-python3 smart_analyzer.py . --review-status <review_id>
+python3 agentsmith.py analyze . --list-reviews
 ```
 
 3) Validate cache reuse
 ```bash
-python3 smart_analyzer.py /path/to/repo "security quick pass" --enable-review-state
+python3 agentsmith.py analyze /path/to/repo "security quick pass" --enable-review-state
 ```
 Expect: "Cache hit" messages for stages on repeat runs.
 
 4) Inspect cache
 ```bash
-python3 smart_analyzer.py . --cache-info
-python3 smart_analyzer.py . --cache-list
+python3 agentsmith.py analyze . --cache-info
 ```
 
-5) Prune/Clear
+5) Clear cache
 ```bash
-python3 smart_analyzer.py . --cache-prune 7
-python3 smart_analyzer.py . --cache-clear
+python3 agentsmith.py analyze . --cache-clear
 ```
 
 6) Auto-detect resume
 ```bash
-python3 smart_analyzer.py /path/to/repo "security quick pass" --enable-review-state
+python3 agentsmith.py analyze /path/to/repo "security quick pass" --enable-review-state
 # If a matching review exists, you'll be prompted to resume
 ```
 
@@ -161,7 +145,7 @@ python3 smart_analyzer.py /path/to/repo "security quick pass" --enable-review-st
 ## Troubleshooting
 
 - "No reviews found": You ran without `--enable-review-state`. Start a review with that flag or resume by ID.
-- Cache grows large: use `--cache-prune 30` monthly; export a manifest via `--cache-export` if you need auditing.
+- Cache grows large: use `python3 smart_analyzer.py . --cache-prune 30` monthly.
 - Different path, same repo: `--resume-review <review_id>` always works; `--enable-review-state` will only auto-detect if fingerprints match.
 - Bypass cache: add `--no-cache` to force fresh API calls.
 

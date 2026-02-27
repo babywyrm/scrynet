@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Help Examples Module for Agent Smith Smart Analyzer
+Help Examples Module for Agent Smith
 
 Provides comprehensive usage examples and scenarios for all features.
 Can be displayed via --help-examples flag or imported for interactive help.
+Uses agentsmith.py (unified CLI) and orchestrator.py (hybrid mode).
 """
 
 from rich.console import Console
@@ -18,27 +19,26 @@ def print_help_examples():
     """Print comprehensive usage examples and scenarios."""
     
     examples = """
-# Agent Smith Smart Analyzer - Usage Examples
+# Agent Smith - Usage Examples
 
 ## Quick Start
 
-### Basic Security Scan
+### Basic Security Scan (Hybrid: static + AI)
 ```bash
-python3 smart_analyzer.py /path/to/repo "find all security vulnerabilities"
+python3 agentsmith.py hybrid /path/to/repo ./scanner "find all security vulnerabilities"
 ```
 
 ### Security Scan with Payloads
 ```bash
-python3 smart_analyzer.py /path/to/repo "find injection vulnerabilities" \\
-  --generate-payloads --top-n 5
+python3 agentsmith.py hybrid /path/to/repo ./scanner "find injection vulnerabilities" \\
+  --generate-payloads --annotate-code --top-n 5
 ```
 
 ### CTF Mode - Quick Vulnerability Discovery
 ```bash
 # CTF mode is optimized for Capture The Flag challenges
 # Focuses on exploitable vulnerabilities and quick wins
-python3 smart_analyzer.py /path/to/ctf-challenge "find all vulnerabilities and flags" \\
-  --ctf-mode \\
+python3 agentsmith.py ctf /path/to/ctf-challenge "find all vulnerabilities and flags" \\
   --top-n 10 \\
   --generate-payloads
 ```
@@ -50,7 +50,7 @@ python3 smart_analyzer.py /path/to/ctf-challenge "find all vulnerabilities and f
 ### Starting a Review with State Tracking
 ```bash
 # Start a new review (saves state for resuming later)
-python3 smart_analyzer.py WebGoat/src/ "find security vulnerabilities" \\
+python3 agentsmith.py analyze WebGoat/src/ "find security vulnerabilities" \\
   --enable-review-state
 ```
 
@@ -58,23 +58,23 @@ python3 smart_analyzer.py WebGoat/src/ "find security vulnerabilities" \\
 
 **Option 1: Auto-resume last matching review**
 ```bash
-python3 smart_analyzer.py WebGoat/src/ "find security vulnerabilities" \\
+python3 agentsmith.py analyze WebGoat/src/ "find security vulnerabilities" \\
   --resume-last
 ```
 
 **Option 2: Resume by review ID**
 ```bash
 # First, list reviews to get the ID
-python3 smart_analyzer.py . --list-reviews
+python3 agentsmith.py analyze . --list-reviews
 
 # Then resume
-python3 smart_analyzer.py WebGoat/src/ --resume-review abc123def456
+python3 agentsmith.py analyze WebGoat/src/ --resume-review abc123def456
 ```
 
 **Option 3: Auto-detect and prompt**
 ```bash
 # If a matching review exists, you'll be prompted
-python3 smart_analyzer.py WebGoat/src/ "find security vulnerabilities" \\
+python3 agentsmith.py analyze WebGoat/src/ "find security vulnerabilities" \\
   --enable-review-state
 ```
 
@@ -82,12 +82,12 @@ python3 smart_analyzer.py WebGoat/src/ "find security vulnerabilities" \\
 
 **List all reviews:**
 ```bash
-python3 smart_analyzer.py . --list-reviews
+python3 agentsmith.py analyze . --list-reviews
 ```
 
 **Check status of a specific review:**
 ```bash
-python3 smart_analyzer.py . --review-status abc123def456
+python3 agentsmith.py analyze . --review-status abc123def456
 ```
 
 **View context file (for Cursor/Claude):**
@@ -101,27 +101,27 @@ cat .agentsmith_cache/reviews/_abc123def456_context.md
 
 ### View Cache Statistics
 ```bash
-python3 smart_analyzer.py . --cache-info
+python3 agentsmith.py analyze . --cache-info
 ```
 
 ### List Recent Cache Entries
 ```bash
-python3 smart_analyzer.py . --cache-list
+python3 agentsmith.py analyze . --cache-list
 ```
 
 ### Prune Old Cache (older than 14 days)
 ```bash
-python3 smart_analyzer.py . --cache-prune 14
+python3 agentsmith.py analyze . --cache-prune 14
 ```
 
 ### Clear All Cache
 ```bash
-python3 smart_analyzer.py . --cache-clear
+python3 agentsmith.py analyze . --cache-clear
 ```
 
 ### Export Cache Manifest
 ```bash
-python3 smart_analyzer.py . --cache-export cache_manifest.json
+python3 agentsmith.py analyze . --cache-export cache_manifest.json
 ```
 
 ---
@@ -137,19 +137,17 @@ CTF mode is specifically optimized for finding exploitable vulnerabilities quick
 
 ### CTF Quick Scan
 ```bash
-python3 smart_analyzer.py /path/to/ctf-challenge \\
+python3 agentsmith.py ctf /path/to/ctf-challenge \\
   "find all security vulnerabilities and flags" \\
-  --ctf-mode \\
   --top-n 10 \\
   --generate-payloads \\
-  --max-files 20
+  --prioritize-top 20
 ```
 
 ### CTF Focused on Entry Points
 ```bash
-python3 smart_analyzer.py /path/to/ctf-challenge \\
+python3 agentsmith.py ctf /path/to/ctf-challenge \\
   "find the top entry points for exploitation" \\
-  --ctf-mode \\
   --prioritize-top 5 \\
   --generate-payloads \\
   --threshold HIGH
@@ -157,9 +155,8 @@ python3 smart_analyzer.py /path/to/ctf-challenge \\
 
 ### CTF with Full Exploitation Roadmap
 ```bash
-python3 smart_analyzer.py /path/to/ctf-challenge \\
+python3 agentsmith.py ctf /path/to/ctf-challenge \\
   "find all exploitable vulnerabilities" \\
-  --ctf-mode \\
   --top-n 15 \\
   --generate-payloads \\
   --annotate-code \\
@@ -217,7 +214,7 @@ python3 orchestrator.py ./flask-app ./scanner \\
 
 ### 1. Comprehensive Security Audit
 ```bash
-python3 smart_analyzer.py /path/to/app \\
+python3 agentsmith.py hybrid /path/to/app \\
   "find all security vulnerabilities and suggest remediations" \\
   --top-n 10 \\
   --generate-payloads \\
@@ -228,7 +225,7 @@ python3 smart_analyzer.py /path/to/app \\
 
 ### 2. Focused Injection Vulnerability Scan
 ```bash
-python3 smart_analyzer.py /path/to/app \\
+python3 agentsmith.py hybrid /path/to/app \\
   "find SQL injection and XSS vulnerabilities" \\
   --top-n 5 \\
   --generate-payloads \\
@@ -238,7 +235,7 @@ python3 smart_analyzer.py /path/to/app \\
 
 ### 3. Authentication & Authorization Review
 ```bash
-python3 smart_analyzer.py /path/to/app \\
+python3 agentsmith.py hybrid /path/to/app \\
   "review authentication and authorization mechanisms" \\
   --top-n 8 \\
   --generate-payloads \\
@@ -247,7 +244,7 @@ python3 smart_analyzer.py /path/to/app \\
 
 ### 4. Performance Analysis
 ```bash
-python3 smart_analyzer.py /path/to/app \\
+python3 agentsmith.py hybrid /path/to/app \\
   "identify performance bottlenecks" \\
   -v \\
   --format html markdown \\
@@ -256,7 +253,7 @@ python3 smart_analyzer.py /path/to/app \\
 
 ### 5. Code Quality Review
 ```bash
-python3 smart_analyzer.py /path/to/python/repo \\
+python3 agentsmith.py hybrid /path/to/python/repo \\
   "review code quality and suggest improvements" \\
   --optimize \\
   --focus typing security readability \\
@@ -270,7 +267,7 @@ python3 smart_analyzer.py /path/to/python/repo \\
 
 ### Custom Model Selection
 ```bash
-python3 smart_analyzer.py /path/to/repo "analyze code" \\
+python3 agentsmith.py hybrid /path/to/repo "analyze code" \\
   --model claude-3-5-sonnet-20241022 \\
   --max-tokens 8000 \\
   --temperature 0.0
@@ -279,18 +276,18 @@ python3 smart_analyzer.py /path/to/repo "analyze code" \\
 ### File Filtering
 ```bash
 # Only analyze specific file types
-python3 smart_analyzer.py /path/to/repo "find vulnerabilities" \\
+python3 agentsmith.py hybrid /path/to/repo "find vulnerabilities" \\
   --include-exts py go js java
 
 # Exclude specific directories
-python3 smart_analyzer.py /path/to/repo "find vulnerabilities" \\
+python3 agentsmith.py hybrid /path/to/repo "find vulnerabilities" \\
   --ignore-dirs tests node_modules vendor
 ```
 
 ### Including YAML/Helm Files
 ```bash
 # Analyze CI/CD workflows and Kubernetes configs
-python3 smart_analyzer.py /path/to/repo \\
+python3 agentsmith.py hybrid /path/to/repo \\
   "review GitHub Actions and K8s configs for security" \\
   --include-yaml \\
   --include-helm
@@ -298,7 +295,7 @@ python3 smart_analyzer.py /path/to/repo \\
 
 ### Verbose Debug Mode
 ```bash
-python3 smart_analyzer.py /path/to/repo "find vulnerabilities" \\
+python3 agentsmith.py hybrid /path/to/repo "find vulnerabilities" \\
   --debug \\
   -v \\
   --enable-review-state
@@ -312,7 +309,7 @@ python3 smart_analyzer.py /path/to/repo "find vulnerabilities" \\
 
 **Step 1: Initial Review**
 ```bash
-python3 smart_analyzer.py WebGoat/src/ \\
+python3 agentsmith.py hybrid WebGoat/src/ \\
   "comprehensive security audit" \\
   --enable-review-state \\
   --generate-payloads \\
@@ -327,21 +324,21 @@ python3 smart_analyzer.py WebGoat/src/ \\
 
 **Step 3: Resume if Interrupted**
 ```bash
-python3 smart_analyzer.py WebGoat/src/ \\
+python3 agentsmith.py hybrid WebGoat/src/ \\
   "comprehensive security audit" \\
   --resume-last
 ```
 
 **Step 4: Check Cache Usage**
 ```bash
-python3 smart_analyzer.py . --cache-info
+python3 agentsmith.py hybrid . --cache-info
 ```
 
 ### Iterative Analysis Workflow
 
 **First Pass: Quick Overview**
 ```bash
-python3 smart_analyzer.py /path/to/repo "security overview" \\
+python3 agentsmith.py hybrid /path/to/repo "security overview" \\
   --top-n 5 \\
   --enable-review-state \\
   --max-files 10
@@ -349,7 +346,7 @@ python3 smart_analyzer.py /path/to/repo "security overview" \\
 
 **Second Pass: Deep Dive on Critical Issues**
 ```bash
-python3 smart_analyzer.py /path/to/repo \\
+python3 agentsmith.py hybrid /path/to/repo \\
   "deep dive on CRITICAL and HIGH impact vulnerabilities" \\
   --resume-last \\
   --threshold HIGH \\
@@ -405,7 +402,7 @@ API Usage Summary
 
 ### Multiple Formats
 ```bash
-python3 smart_analyzer.py /path/to/repo "analyze" \\
+python3 agentsmith.py hybrid /path/to/repo "analyze" \\
   --format console html markdown json \\
   --output analysis_report
 ```
@@ -474,12 +471,12 @@ rm -rf .agentsmith_cache/api_cache/*
 
 ---
 
-For more information, see `readme.md` in the beta directory.
+For more information, see `readme.md` and `QUICKSTART.md`.
 """
     
     console.print(Panel(
         Markdown(examples),
-        title="[bold cyan]Agent Smith Smart Analyzer - Usage Examples[/bold cyan]",
+        title="[bold cyan]Agent Smith - Usage Examples[/bold cyan]",
         border_style="cyan",
         padding=(1, 2)
     ))
@@ -493,48 +490,48 @@ def print_quick_reference():
     table.add_column("Command", style="green", width=60)
     
     table.add_row(
-        "Basic security scan",
-        "python3 smart_analyzer.py <repo> \"find vulnerabilities\""
+        "Basic hybrid scan",
+        "python3 agentsmith.py hybrid <repo> ./scanner \"find vulnerabilities\""
     )
     table.add_row(
         "CTF mode (quick wins)",
-        "python3 smart_analyzer.py <repo> \"find vulnerabilities\" --ctf-mode --generate-payloads"
+        "python3 agentsmith.py ctf <repo> \"find vulnerabilities\" --generate-payloads"
     )
     table.add_row(
         "Start review with state",
-        "python3 smart_analyzer.py <repo> \"question\" --enable-review-state"
+        "python3 agentsmith.py analyze <repo> \"question\" --enable-review-state"
     )
     table.add_row(
         "Resume last review",
-        "python3 smart_analyzer.py <repo> \"question\" --resume-last"
+        "python3 agentsmith.py analyze <repo> \"question\" --resume-last"
     )
     table.add_row(
         "Resume by ID",
-        "python3 smart_analyzer.py <repo> --resume-review <id>"
+        "python3 agentsmith.py analyze <repo> --resume-review <id>"
     )
     table.add_row(
         "List reviews",
-        "python3 smart_analyzer.py . --list-reviews"
+        "python3 agentsmith.py analyze . --list-reviews"
     )
     table.add_row(
         "Cache info",
-        "python3 smart_analyzer.py . --cache-info"
+        "python3 agentsmith.py analyze . --cache-info"
     )
     table.add_row(
         "Clear cache",
-        "python3 smart_analyzer.py . --cache-clear"
+        "python3 agentsmith.py analyze . --cache-clear"
     )
     table.add_row(
         "With payloads",
-        "python3 smart_analyzer.py <repo> \"question\" --generate-payloads --top-n 5"
+        "python3 agentsmith.py hybrid <repo> ./scanner \"question\" --generate-payloads --top-n 5"
     )
     table.add_row(
         "Verbose + debug",
-        "python3 smart_analyzer.py <repo> \"question\" -v --debug"
+        "python3 agentsmith.py hybrid <repo> ./scanner \"question\" -v --debug"
     )
     table.add_row(
         "Multiple formats",
-        "python3 smart_analyzer.py <repo> \"question\" --format html markdown --output report"
+        "python3 agentsmith.py hybrid <repo> ./scanner \"question\" --export-format html markdown"
     )
     
     console.print("\n")
